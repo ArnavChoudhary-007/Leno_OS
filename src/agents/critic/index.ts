@@ -112,24 +112,22 @@ export async function critique(
   });
 
   const byPlatform = new Map(result.object.critiques.map((c) => [c.platform, c]));
+  const missing = platforms.filter((p) => !byPlatform.has(p));
+  if (missing.length > 0) {
+    throw new Error(`Critic skipped platform(s): ${missing.join(", ")}`);
+  }
 
   const critiques: Critique[] = drafts.map((draft) => {
-    const llm = byPlatform.get(draft.platform);
-    const scores = llm?.scores ?? {
-      brand_voice: 0,
-      goal_fit: 0,
-      platform_fit: 0,
-      craft: 0,
-    };
+    const llm = byPlatform.get(draft.platform)!;
     const gate_failures = hardGates(draft);
-    const weighted = weightedScore(scores);
+    const weighted = weightedScore(llm.scores);
 
     return {
       platform: draft.platform,
-      scores,
-      // Hard failures go first — they must be fixed before anything else.
-      fix_list: [...gate_failures, ...(llm?.fix_list ?? [])].slice(0, 10),
-      rationale: llm?.rationale ?? "No critique returned for this platform.",
+      scores: llm.scores,
+      // Gates stay in gate_failures — fix_list is the model's ≤5 items only.
+      fix_list: llm.fix_list,
+      rationale: llm.rationale,
       weighted,
       gate_failures,
       pass: weighted >= threshold && gate_failures.length === 0,

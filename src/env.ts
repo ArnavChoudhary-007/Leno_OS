@@ -2,10 +2,16 @@
  * Fails fast on bad config instead of surfacing deep inside an agent or db
  * call. SKIP_ENV_VALIDATION=1 bypasses it for the Docker build, which
  * compiles before any secret exists.
+ *
+ * Do not import this module from a Client Component. Service-role and
+ * DATABASE_URL must never ship to the browser.
  */
 import { z } from "zod";
 
 const envSchema = z.object({
+  // Public origin for redirects and same-origin checks on mutating APIs.
+  APP_URL: z.string().url().default("http://localhost:3000"),
+
   // Supabase project API (Settings → API). Server-only; do not prefix
   // SUPABASE_SERVICE_ROLE_KEY with NEXT_PUBLIC_.
   SUPABASE_URL: z.string().url(),
@@ -23,15 +29,16 @@ const envSchema = z.object({
       "DATABASE_URL must start with postgres:// or postgresql://",
     ),
 
-  // Vercel AI SDK providers. Required once agents/tools/llm.ts is used.
-  GOOGLE_GENERATIVE_AI_API_KEY: z.string().optional(),
-  GROQ_API_KEY: z.string().optional(),
+  // Writer (Gemini) + critic (Groq). Required at boot so a campaign never
+  // queues and then dies mid-run on a missing key.
+  GOOGLE_GENERATIVE_AI_API_KEY: z.string().min(1),
+  GROQ_API_KEY: z.string().min(1),
 
   // Model ids are configured via env, never hard-coded in source.
-  WRITER_MODEL: z.string().optional(),
-  CRITIC_MODEL: z.string().optional(),
+  WRITER_MODEL: z.string().min(1),
+  CRITIC_MODEL: z.string().min(1),
 
-  // Bluesky publishing (tools/social/bluesky.ts), used later.
+  // Bluesky publishing (tools/social/bluesky.ts). Optional until you publish.
   BLUESKY_HANDLE: z.string().optional(),
   BLUESKY_APP_PASSWORD: z.string().optional(),
 });

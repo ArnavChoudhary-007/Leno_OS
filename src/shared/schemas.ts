@@ -17,21 +17,51 @@ export const PlatformIdSchema = z.enum([
   "facebook",
 ]);
 
-export const CampaignStatusSchema = z.enum([
+export const CAMPAIGN_STATUSES = [
   "queued",
   "running",
   "needs_human",
   "ready",
   "failed",
-]);
+] as const;
 
-export const DraftStatusSchema = z.enum([
+export const DRAFT_STATUSES = [
   "draft",
   "needs_human",
   "approved",
   "rejected",
   "published",
-]);
+] as const;
+
+export const CampaignStatusSchema = z.enum(CAMPAIGN_STATUSES);
+export const DraftStatusSchema = z.enum(DRAFT_STATUSES);
+
+export const WORKSPACE_ROLES = ["viewer", "editor", "admin", "owner"] as const;
+export const WorkspaceRoleSchema = z.enum(WORKSPACE_ROLES);
+
+export const ERROR_CODES = [
+  "unauthorized",
+  "forbidden",
+  "not_found",
+  "invalid_body",
+  "conflict",
+  "queue_full",
+  "rate_limited",
+  "not_publishable",
+  "not_configured",
+  "job_failed",
+  "no_workspace",
+] as const;
+export const ErrorCodeSchema = z.enum(ERROR_CODES);
+
+export const SignInSchema = z.object({
+  email: z.string().trim().email("Enter a valid email"),
+  password: z.string().min(8, "At least 8 characters").max(128),
+});
+
+export const InviteAcceptSchema = z.object({
+  token: z.string().trim().min(16).max(128),
+});
 
 // ---------------------------------------------------------------------------
 // Company context
@@ -42,6 +72,7 @@ export const EXAMPLE_POST_COUNT = 5;
 
 export const BrandProfileSchema = z.object({
   id: z.string(),
+  workspace_id: z.string(),
   name: z.string(),
   one_liner: z.string(),
   positioning: z.string(),
@@ -197,4 +228,28 @@ export const CriticNotesSchema = z.object({
   gate_failures: z.array(z.string()),
   rationale: z.string(),
 });
+
+/** Human review actions on one draft (Approve / Edit / Reject / Publish / Schedule). */
+export const DraftReviewSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("approve") }),
+  z.object({
+    action: z.literal("reject"),
+    review_note: z
+      .string()
+      .trim()
+      .min(1, "Add a short note for the next revision")
+      .max(500),
+  }),
+  z.object({
+    action: z.literal("edit"),
+    body: z.string().trim().min(1, "Body cannot be empty").max(5000),
+    hashtags: z.array(z.string().trim().min(1)).max(30),
+  }),
+  z.object({ action: z.literal("publish") }),
+  z.object({
+    action: z.literal("schedule"),
+    scheduled_at: z.string().datetime({ offset: true }),
+  }),
+  z.object({ action: z.literal("clear_schedule") }),
+]);
 

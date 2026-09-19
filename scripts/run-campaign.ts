@@ -8,9 +8,14 @@
 import { runCampaign } from "@/agents/orchestrator";
 import { PLATFORM_PLAYBOOKS } from "@/agents/platforms";
 import { client } from "@/db/client";
+import { getBrandProfile } from "@/db/queries/brand";
 import { getCampaign, insertCampaign } from "@/db/queries/campaigns";
 import { getDraftsForCampaign } from "@/db/queries/drafts";
 import { getRunSteps } from "@/db/queries/runs";
+import {
+  getWorkspaceBySlug,
+  LOCAL_WORKSPACE_SLUG,
+} from "@/db/queries/workspaces";
 import type { PlatformId } from "@/shared/types";
 
 const SAMPLE_BRIEF =
@@ -39,7 +44,18 @@ async function main() {
   console.log(`Brief: ${brief}\n`);
   if (threshold !== undefined) console.log(`Pass threshold: ${threshold}\n`);
 
-  const campaign = await insertCampaign(brief);
+  const workspace = await getWorkspaceBySlug(LOCAL_WORKSPACE_SLUG);
+  if (!workspace) {
+    throw new Error(`Workspace "${LOCAL_WORKSPACE_SLUG}" is missing.`);
+  }
+  const brand = await getBrandProfile(workspace.id);
+
+  const campaign = await insertCampaign({
+    workspaceId: workspace.id,
+    createdBy: "cli",
+    brief,
+    brandId: brand?.id ?? null,
+  });
   console.log(`Campaign ${campaign.id} — running...\n`);
 
   const started = Date.now();

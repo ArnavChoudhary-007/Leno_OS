@@ -9,15 +9,17 @@ import type { BrandProfile, BrandProfileInput } from "@/shared/types";
  * fine for V8 but not guaranteed elsewhere. Normalize at the boundary so
  * every `BrandProfile.updated_at` the app sees is a real ISO string.
  */
-function normalize(row: BrandProfile): BrandProfile {
+function normalize(row: typeof brandProfile.$inferSelect): BrandProfile {
   return { ...row, updated_at: new Date(row.updated_at).toISOString() };
 }
 
-/** There is only ever meant to be one row in this table. */
-export async function getBrandProfile(): Promise<BrandProfile | null> {
+export async function getBrandProfile(
+  workspaceId: string,
+): Promise<BrandProfile | null> {
   const rows = await db
     .select()
     .from(brandProfile)
+    .where(eq(brandProfile.workspace_id, workspaceId))
     .orderBy(desc(brandProfile.updated_at))
     .limit(1);
 
@@ -25,16 +27,15 @@ export async function getBrandProfile(): Promise<BrandProfile | null> {
 }
 
 /**
- * Inserts the brand profile if none exists yet, otherwise updates the
- * existing row and refreshes `updated_at`.
+ * Inserts the brand profile if none exists yet for this workspace,
+ * otherwise updates the existing row and refreshes `updated_at`.
  */
 export async function upsertBrandProfile(
+  workspaceId: string,
   input: BrandProfileInput,
 ): Promise<BrandProfile> {
-  const existing = await getBrandProfile();
+  const existing = await getBrandProfile(workspaceId);
   const updated_at = new Date().toISOString();
-  // BrandProfileInputSchema enforces exactly 5 example posts; the column's
-  // TS type is a fixed 5-tuple, string[] is not, hence the assertion.
   const example_posts = input.example_posts as [
     string,
     string,
@@ -54,7 +55,7 @@ export async function upsertBrandProfile(
 
   const [row] = await db
     .insert(brandProfile)
-    .values({ ...input, example_posts, updated_at })
+    .values({ ...input, example_posts, updated_at, workspace_id: workspaceId })
     .returning();
   return normalize(row);
 }

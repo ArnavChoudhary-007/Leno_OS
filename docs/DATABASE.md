@@ -44,6 +44,7 @@ Loaded for every agent prompt through `getCompanyContext()` → `buildBrandCard(
 | `goal` | text, nullable | Denormalized `plan.goal` for display/filter; set when the plan step lands |
 | `plan` | jsonb `Plan`, nullable | `{ goal, audience, key_message, platforms }` |
 | `status` | text | `queued` \| `running` \| `needs_human` \| `ready` \| `failed` |
+| `started_at` | timestamptz, nullable | Set when a run is claimed; used to reclaim stale `running` rows |
 | `created_at` | timestamptz | |
 
 Strategy is **not** a campaign column. It lives in `run_steps` (`step = 'strategy'`) so the audit trail stays the source of truth without duplicating a large jsonb on every campaign.

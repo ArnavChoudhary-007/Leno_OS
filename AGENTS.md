@@ -39,7 +39,7 @@ the rubric constants and `src/agents/orchestrator/index.ts` for the loop.
 - `src/agents/` — orchestrator, strategy, critic, and one module per
   platform (`agents/platforms/`). Brand/audience and research agents are
   planned but not built; don't leave empty stubs for them.
-- `src/creative/templates/` — branded image templates (later)
+- `src/creative/` — branded OG quote cards + carousel slides (`next/og`)
 - `src/tools/` — `llm.ts` (model registry), `social/bluesky.ts` (publish)
 - `src/memory/context.ts` — loads the brand profile for agent prompts
 - `src/workflows/campaign-run.ts` — starts a campaign run in the background
@@ -48,8 +48,10 @@ the rubric constants and `src/agents/orchestrator/index.ts` for the loop.
 - `src/shared/` — `schemas.ts` (all zod schemas), `types.ts` (inferred
  types), `brand-card.ts` (the text every agent prompt is built from)
 - `src/env.ts` — zod-validated environment variables
-- `docker-compose.yml` / `Dockerfile` — production stack on EC2
- (migrate against Supabase + app); database is Supabase Postgres
+- `ecosystem.config.cjs` / `scripts/deploy.sh` — PM2 ship path on EC2
+- `docs/SHIP.md` — deploy checklist + demo script
+- `docker-compose.yml` / `Dockerfile` — optional container path
+  (migrate against Supabase + app); database is always Supabase Postgres
 
 ## Hard rules
 

@@ -15,8 +15,12 @@ export function LoadDemoButton() {
     if (!confirmed) return;
 
     startTransition(async () => {
-      await loadDemoBrand();
-      toast.success("Demo brand loaded");
+      const result = await loadDemoBrand();
+      if (result.ok) {
+        toast.success(result.message);
+      } else {
+        toast.error(result.message);
+      }
     });
   }
 

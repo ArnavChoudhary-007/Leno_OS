@@ -108,34 +108,22 @@ npm run dev
 
 ## Deploy to EC2
 
-The production stack is two Docker Compose services on one AWS EC2
-instance (ARM, `t4g.small`): `migrate` (a one-shot job that runs
-`drizzle-kit migrate` against Supabase and exits), and `app` (the Next.js
-standalone server), wired so `app` only starts once `migrate` has
-completed successfully. Postgres lives in Supabase — nothing listens on
-5432 on the EC2 host.
+**Preferred (sprint):** Node 22 + PM2 on one ARM `t4g.small`. No Docker.
+See `docs/SHIP.md` for the full checklist.
 
-1. Launch a `t4g.small` instance (Amazon Linux or Ubuntu ARM64). In its
-   security group, allow port 22 from your IP only, and ports 80/443 from
-   anywhere.
-2. Install Docker and the Compose plugin, and add swap (the instance only
-   has 2 GB RAM):
-   ```bash
-   curl -fsSL https://get.docker.com | sh
-   sudo usermod -aG docker $USER
-   sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile
-   sudo mkswap /swapfile && sudo swapon /swapfile
-   echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
-   ```
-3. Clone the repo and create `.env` from `.env.example`, setting
-   `DATABASE_URL` to your Supabase URI and the model/API keys.
-4. Start the stack:
-   ```bash
-   docker compose up -d --build
-   ```
-5. Confirm `curl http://localhost/api/health` (or the instance's public
-   address) returns `{"ok":true}`.
+```bash
+sudo npm i -g pm2
+cp .env.example .env   # fill secrets
+npm run db:migrate && npm run db:seed
+./scripts/deploy.sh
+pm2 startup && pm2 save
+```
 
-Supabase provides managed backups in the dashboard. Optionally run
-`scripts/backup.sh` on the EC2 host (`pg_dump` via `DATABASE_URL`, gzip
-into `backups/`, keep the last 7).
+Security group: port **22** from your IP only, **80/443** (or 3000 for a
+raw demo) from anywhere. **Never open 5432** — Postgres is Supabase.
+
+**Optional:** Docker Compose (`migrate` one-shot + `app` on port 80) remains
+in `docker-compose.yml` / `Dockerfile` if you prefer containers.
+
+Supabase provides managed backups. Optionally run `scripts/backup.sh` on
+the host (`pg_dump` via `DATABASE_URL`).

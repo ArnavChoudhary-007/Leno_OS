@@ -1,4 +1,5 @@
 import {
+  claimCampaign,
   getCampaign,
   saveCampaignPlan,
   updateCampaignStatus,
@@ -7,10 +8,11 @@ import {
   insertDrafts,
   updateDraftCritique,
   updateDraftStatus,
+  type DraftRow,
 } from "@/db/queries/drafts";
 import { logStep } from "@/db/queries/runs";
 import { buildBrandCard, getCompanyContext } from "@/memory/context";
-import type { Critique, Draft, Plan, Strategy } from "@/shared/types";
+import type { Critique, Draft, Plan, PlatformId, Strategy } from "@/shared/types";
 import { critique, MAX_REVISION_ROUNDS, PASS_THRESHOLD } from "../critic";
 import { draftAll, reviseDrafts } from "../platforms/draft";
 import { strategy as buildStrategy } from "../strategy";
@@ -23,6 +25,23 @@ type Slot = {
   draft: Draft;
   critique: Critique;
 };
+
+/** Look up insert results by platform — never by array index. */
+function rowsByPlatform(rows: DraftRow[]): Map<PlatformId, DraftRow> {
+  const map = new Map<PlatformId, DraftRow>();
+  for (const row of rows) {
+    map.set(row.platform as PlatformId, row);
+  }
+  return map;
+}
+
+function critiquesByPlatform(critiques: Critique[]): Map<PlatformId, Critique> {
+  const map = new Map<PlatformId, Critique>();
+  for (const c of critiques) {
+    map.set(c.platform, c);
+  }
+  return map;
+}
 
 /**
  * Orchestrator loop:
@@ -45,16 +64,19 @@ export async function runCampaign(
   const threshold = opts?.threshold ?? PASS_THRESHOLD;
 
   try {
+    // Claims queued campaigns, or reclaims ones stuck in `running` past the
+    // stale window (process crash). Active runs and finished ones are no-ops.
+    const claimed = await claimCampaign(campaignId);
+    if (!claimed) return;
+
     const campaign = await getCampaign(campaignId);
     if (!campaign) {
       throw new Error(`Campaign ${campaignId} not found`);
     }
-    // Guard against double runs (a retried request, a duplicate after()).
-    if (campaign.status !== "queued") return;
 
-    await updateCampaignStatus(campaignId, "running");
-
-    const brandCard = buildBrandCard(await getCompanyContext());
+    const brandCard = buildBrandCard(
+      await getCompanyContext(campaign.workspace_id),
+    );
 
     // 1. Plan
     const planned = await runStep(campaignId, "plan", () =>
@@ -79,6 +101,7 @@ export async function runCampaign(
 
     const rows = await insertDrafts(
       drafted.object.map((draft) => ({
+        workspace_id: campaign.workspace_id,
         campaign_id: campaignId,
         platform: draft.platform,
         version: 1,
@@ -92,10 +115,18 @@ export async function runCampaign(
       critique(drafted.object, plan, brandCard, threshold),
     );
 
+    const rowMap = rowsByPlatform(rows);
+    const critiqueMap = critiquesByPlatform(critiqued.object);
     const slots = new Map<string, Slot>();
-    for (const [index, draft] of drafted.object.entries()) {
-      const row = rows[index];
-      const verdict = critiqued.object[index];
+    for (const draft of drafted.object) {
+      const row = rowMap.get(draft.platform);
+      const verdict = critiqueMap.get(draft.platform);
+      if (!row) {
+        throw new Error(`No DB row returned for platform ${draft.platform}`);
+      }
+      if (!verdict) {
+        throw new Error(`No critique returned for platform ${draft.platform}`);
+      }
       slots.set(draft.platform, {
         draftId: row.id,
         version: row.version,
@@ -122,6 +153,7 @@ export async function runCampaign(
 
       const newRows = await insertDrafts(
         revised.object.map((draft) => ({
+          workspace_id: campaign.workspace_id,
           campaign_id: campaignId,
           platform: draft.platform,
           version: (slots.get(draft.platform)?.version ?? 1) + 1,
@@ -135,9 +167,17 @@ export async function runCampaign(
         critique(revised.object, plan, brandCard, threshold),
       );
 
-      for (const [index, draft] of revised.object.entries()) {
-        const row = newRows[index];
-        const verdict = rescored.object[index];
+      const newRowMap = rowsByPlatform(newRows);
+      const rescoreMap = critiquesByPlatform(rescored.object);
+      for (const draft of revised.object) {
+        const row = newRowMap.get(draft.platform);
+        const verdict = rescoreMap.get(draft.platform);
+        if (!row) {
+          throw new Error(`No DB row returned for revised ${draft.platform}`);
+        }
+        if (!verdict) {
+          throw new Error(`No critique returned for revised ${draft.platform}`);
+        }
         slots.set(draft.platform, {
           draftId: row.id,
           version: row.version,

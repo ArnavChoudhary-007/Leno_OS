@@ -25,9 +25,14 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">
+      <body className="flex min-h-full flex-col">
         {children}
-        <Toaster />
+        <Toaster
+          position="top-center"
+          toastOptions={{
+            className: "border-border bg-card text-card-foreground shadow-md",
+          }}
+        />
       </body>
     </html>
   );

@@ -1,15 +1,9 @@
 import { asc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { runSteps } from "@/db/schema";
+import type { RunStepName } from "@/shared/types";
 
-/** Every step the orchestrator can log, in the order they normally happen. */
-export type RunStepName =
-  | "plan"
-  | "strategy"
-  | "draft"
-  | "critique"
-  | "revise"
-  | "error";
+export type { RunStepName };
 
 export type RunStep = typeof runSteps.$inferSelect;
 
@@ -20,8 +14,19 @@ export async function logStep(
   model: string,
   output: unknown,
   durationMs: number,
+  workspaceId?: string,
 ): Promise<void> {
+  let workspace_id = workspaceId;
+  if (!workspace_id) {
+    const { getCampaign } = await import("./campaigns");
+    const campaign = await getCampaign(campaignId);
+    workspace_id = campaign?.workspace_id;
+  }
+  if (!workspace_id) {
+    throw new Error(`Cannot log step: campaign ${campaignId} has no workspace`);
+  }
   await db.insert(runSteps).values({
+    workspace_id,
     campaign_id: campaignId,
     step,
     model,

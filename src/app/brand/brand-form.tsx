@@ -53,7 +53,15 @@ function toFormValues(profile: BrandProfile | null): BrandProfileInput {
 
 const initialActionState: BrandFormState = { ok: false, errors: {} };
 
-export function BrandForm({ profile }: { profile: BrandProfile | null }) {
+export function BrandForm({
+  profile,
+  readOnly = false,
+  showDemo = true,
+}: {
+  profile: BrandProfile | null;
+  readOnly?: boolean;
+  showDemo?: boolean;
+}) {
   const [values, setValues] = useState<BrandProfileInput>(() =>
     toFormValues(profile),
   );
@@ -90,6 +98,7 @@ export function BrandForm({ profile }: { profile: BrandProfile | null }) {
   return (
     <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_22rem]">
       <form action={formAction} className="flex flex-col gap-6">
+        <fieldset disabled={readOnly} className="flex flex-col gap-6">
         {LIST_FIELDS.map((field) => (
           <input
             key={field}
@@ -233,12 +242,13 @@ export function BrandForm({ profile }: { profile: BrandProfile | null }) {
             <p className="text-xs text-destructive">{errors.example_posts[0]}</p>
           ) : null}
         </fieldset>
+        </fieldset>
 
         <div className="flex flex-wrap items-center gap-3 pt-2">
-          <Button type="submit" disabled={isPending}>
+          <Button type="submit" disabled={isPending || readOnly}>
             {isPending ? "Saving…" : "Save"}
           </Button>
-          <LoadDemoButton />
+          {showDemo ? <LoadDemoButton /> : null}
           {profile ? (
             <span className="text-xs text-muted-foreground">
               Last updated {formatRelativeTime(profile.updated_at)}
@@ -247,14 +257,14 @@ export function BrandForm({ profile }: { profile: BrandProfile | null }) {
         </div>
       </form>
 
-      <aside className="flex flex-col gap-2 lg:sticky lg:top-8 lg:self-start">
+      <aside className="surface flex flex-col gap-2 rounded-2xl border border-border p-4 lg:sticky lg:top-20 lg:self-start">
         <div className="flex items-baseline justify-between">
           <h2 className="text-sm font-medium">What the agents see</h2>
           <span className="text-xs text-muted-foreground">
             ~{tokenEstimate} tokens
           </span>
         </div>
-        <pre className="max-h-[75vh] overflow-auto rounded-lg border border-border bg-muted p-4 font-mono text-xs whitespace-pre-wrap text-foreground">
+        <pre className="max-h-[70vh] overflow-auto rounded-xl bg-muted/70 p-4 font-mono text-xs whitespace-pre-wrap text-foreground">
           {card}
         </pre>
       </aside>

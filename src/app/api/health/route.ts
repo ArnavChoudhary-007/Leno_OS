@@ -6,6 +6,10 @@ import { db } from "@/db/client";
 export const runtime = "nodejs";
 
 export async function GET() {
-  await db.execute(sql`select 1`);
-  return NextResponse.json({ ok: true });
+  try {
+    await db.execute(sql`select 1`);
+    return NextResponse.json({ ok: true });
+  } catch {
+    return NextResponse.json({ ok: false }, { status: 503 });
+  }
 }

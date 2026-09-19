@@ -106,13 +106,24 @@ export async function reviseDrafts(
   return { ...result, object: dedupeByPlatform(result.object.drafts, platforms) };
 }
 
-/** Keeps the first draft per requested platform and drops anything unasked for. */
-function dedupeByPlatform(drafts: Draft[], wanted: PlatformId[]): Draft[] {
+/**
+ * Keeps the first draft per requested platform and drops extras.
+ * Throws if the writer skipped any requested platform — a silent gap used
+ * to look like a zero-score post rather than a model failure.
+ */
+export function dedupeByPlatform(
+  drafts: Draft[],
+  wanted: PlatformId[],
+): Draft[] {
   const seen = new Map<PlatformId, Draft>();
   for (const draft of drafts) {
     if (!PLATFORM_PLAYBOOKS[draft.platform]?.enabled) continue;
     if (!wanted.includes(draft.platform)) continue;
     if (!seen.has(draft.platform)) seen.set(draft.platform, draft);
   }
-  return wanted.map((p) => seen.get(p)).filter((d): d is Draft => Boolean(d));
+  const missing = wanted.filter((p) => !seen.has(p));
+  if (missing.length > 0) {
+    throw new Error(`Writer skipped platform(s): ${missing.join(", ")}`);
+  }
+  return wanted.map((p) => seen.get(p)!);
 }

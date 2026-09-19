@@ -13,11 +13,14 @@ import type {
   CritiqueLLMSetSchema,
   CritiqueSchema,
   CritiqueScoresSchema,
+  DraftReviewSchema,
   DraftSchema,
   DraftSetSchema,
   DraftStatusSchema,
+  ErrorCodeSchema,
   PlanSchema,
   PlatformIdSchema,
+  WorkspaceRoleSchema,
   PlatformNotesSchema,
   StrategySchema,
 } from "./schemas";
@@ -25,6 +28,8 @@ import type {
 export type PlatformId = z.infer<typeof PlatformIdSchema>;
 export type CampaignStatus = z.infer<typeof CampaignStatusSchema>;
 export type DraftStatus = z.infer<typeof DraftStatusSchema>;
+export type WorkspaceRole = z.infer<typeof WorkspaceRoleSchema>;
+export type ErrorCode = z.infer<typeof ErrorCodeSchema>;
 
 export type BrandProfile = z.infer<typeof BrandProfileSchema>;
 export type BrandProfileInput = z.infer<typeof BrandProfileInputSchema>;
@@ -36,9 +41,18 @@ export type Strategy = z.infer<typeof StrategySchema>;
 
 export type Draft = z.infer<typeof DraftSchema>;
 export type DraftSet = z.infer<typeof DraftSetSchema>;
+export type DraftReview = z.infer<typeof DraftReviewSchema>;
 
 export type CritiqueScores = z.infer<typeof CritiqueScoresSchema>;
 export type CritiqueLLM = z.infer<typeof CritiqueLLMSchema>;
 export type CritiqueLLMSet = z.infer<typeof CritiqueLLMSetSchema>;
 export type Critique = z.infer<typeof CritiqueSchema>;
 export type CriticNotes = z.infer<typeof CriticNotesSchema>;
+
+export type RunStepName =
+  | "plan"
+  | "strategy"
+  | "draft"
+  | "critique"
+  | "revise"
+  | "error";

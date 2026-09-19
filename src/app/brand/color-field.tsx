@@ -27,7 +27,7 @@ export function ColorField({
           aria-label={`${label} picker`}
           value={isValidHex ? value : "#000000"}
           onChange={(e) => onChange(e.target.value)}
-          className="h-9 w-10 shrink-0 cursor-pointer rounded-lg border border-border bg-transparent p-1"
+          className="h-10 w-10 shrink-0 cursor-pointer rounded-xl border border-border bg-transparent p-1"
         />
         <input
           id={name}

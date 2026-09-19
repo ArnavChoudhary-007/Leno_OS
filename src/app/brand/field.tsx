@@ -16,7 +16,7 @@ export function Field({
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-baseline justify-between gap-2">
-        <label htmlFor={htmlFor} className="text-sm font-medium">
+        <label htmlFor={htmlFor} className="text-sm font-medium text-foreground">
           {label}
         </label>
         {hint ? <span className="text-xs text-muted-foreground">{hint}</span> : null}
@@ -30,7 +30,7 @@ export function Field({
 }
 
 export const inputClass =
-  "h-9 w-full rounded-lg border border-border bg-input/30 px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive";
+  "h-10 w-full rounded-xl border border-border bg-card px-3.5 text-sm outline-none transition-shadow placeholder:text-muted-foreground/80 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40 disabled:opacity-60 aria-invalid:border-destructive";
 
 export const textareaClass =
-  "w-full rounded-lg border border-border bg-input/30 px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive";
+  "w-full rounded-xl border border-border bg-card px-3.5 py-2.5 text-sm outline-none transition-shadow placeholder:text-muted-foreground/80 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40 disabled:opacity-60 aria-invalid:border-destructive";
