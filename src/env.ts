@@ -6,11 +6,16 @@
 import { z } from "zod";
 
 const envSchema = z.object({
-  // Postgres, via postgres.js. Required — see docker-compose*.yml / .env.example.
+  // Supabase Postgres, via postgres.js + Drizzle. Copy the URI from
+  // Project Settings → Database (prefer Session/Direct for migrations;
+  // Transaction pooler is fine for the app). See .env.example.
   DATABASE_URL: z
     .string()
     .min(1)
-    .regex(/^postgres:\/\//, "DATABASE_URL must start with postgres://"),
+    .regex(
+      /^postgres(ql)?:\/\//,
+      "DATABASE_URL must start with postgres:// or postgresql://",
+    ),
 
   // Vercel AI SDK providers. Required once agents/tools/llm.ts is used.
   GOOGLE_GENERATIVE_AI_API_KEY: z.string().optional(),
