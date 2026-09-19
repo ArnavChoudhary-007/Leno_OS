@@ -9,4 +9,5 @@ export const facebookPlaybook: PlatformPlaybook = {
   maxHashtags: 5,
   formatNotes: "TODO: define once Facebook publishing is in scope.",
   toneNotes: "TODO: define once Facebook publishing is in scope.",
+  imageSpec: { width: 1024, height: 536, ratio: "1.91:1" },
 };

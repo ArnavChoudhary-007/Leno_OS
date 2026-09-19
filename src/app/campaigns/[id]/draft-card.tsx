@@ -3,11 +3,11 @@
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { inputClass, textareaClass } from "@/app/brand/field";
 import { PLATFORM_PLAYBOOKS, composePost } from "@/agents/platforms";
 import { apiErrorMessage } from "@/lib/api-error";
-import type { CriticNotes, DraftStatus, PlatformId } from "@/shared/types";
+import type { CriticNotes, DraftStatus, PlatformId, PublishDestinations } from "@/shared/types";
 import { DraftCreative } from "./draft-creative";
 
 export type DraftCardData = {
@@ -23,6 +23,7 @@ export type DraftCardData = {
   review_note: string | null;
   scheduled_at: string | null;
   published_url: string | null;
+  image_url: string | null;
 };
 
 function statusLabel(status: DraftStatus): string {
@@ -58,9 +59,11 @@ function statusVariant(
 
 export function DraftCard({
   draft,
+  destinations,
   onChanged,
 }: {
   draft: DraftCardData;
+  destinations?: PublishDestinations;
   onChanged: () => void;
 }) {
   const platform = draft.platform as PlatformId;
@@ -109,7 +112,9 @@ export function DraftCard({
       case "edit":
         return "Saved edit";
       case "publish":
-        return "Published to Bluesky";
+        return platform === "linkedin"
+          ? "Published to LinkedIn"
+          : "Published to Bluesky";
       case "schedule":
         return "Scheduled";
       case "clear_schedule":
@@ -156,9 +161,14 @@ export function DraftCard({
 
   const locked = draft.status === "published" || draft.status === "approved";
   const notes = draft.critic_notes;
+  const destination = platform === "linkedin" ? "LinkedIn" : "Bluesky";
+  const canPublish =
+    platform === "linkedin"
+      ? Boolean(destinations?.linkedin)
+      : Boolean(destinations?.bluesky);
 
   return (
-    <article className="surface rounded-2xl border border-border p-5">
+    <article className="card">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold">
@@ -233,6 +243,7 @@ export function DraftCard({
             draftId={draft.id}
             body={draft.body}
             platform={platform}
+            imageUrl={draft.image_url}
           />
         </>
       )}
@@ -279,7 +290,7 @@ export function DraftCard({
             rel="noreferrer"
             className="underline underline-offset-4"
           >
-            View on Bluesky
+            View on {destination}
           </a>
         </p>
       ) : null}
@@ -382,13 +393,19 @@ export function DraftCard({
 
       {draft.status === "approved" && !editing && !rejecting && !scheduling ? (
         <div className="mt-3 flex flex-wrap gap-2">
-          <Button
-            size="sm"
-            disabled={pending}
-            onClick={() => review({ action: "publish" })}
-          >
-            Publish to Bluesky
-          </Button>
+          {canPublish ? (
+            <Button
+              size="sm"
+              disabled={pending}
+              onClick={() => review({ action: "publish" })}
+            >
+              Publish to {destination}
+            </Button>
+          ) : (
+            <a href="/integrations" className={buttonVariants({ size: "sm", variant: "outline" })}>
+              Connect {destination} to publish
+            </a>
+          )}
           <Button
             size="sm"
             variant="outline"

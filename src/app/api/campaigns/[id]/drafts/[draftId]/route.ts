@@ -3,6 +3,7 @@ import { requireAuthContext, requireCan } from "@/auth/server";
 import {
   approveDraft,
   clearDraftSchedule,
+  deleteDraft,
   editDraft,
   getDraftInWorkspace,
   rejectDraft,
@@ -17,8 +18,8 @@ import {
 import { consumeRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { AppError } from "@/shared/errors";
 import { DraftReviewSchema } from "@/shared/schemas";
-import { blueskyConfigured } from "@/tools/social/bluesky";
-import { publishApprovedDraft } from "@/workflows/publish-draft";
+import type { PlatformId } from "@/shared/types";
+import { publishApprovedDraft, assertPublishReady } from "@/workflows/publish-draft";
 
 export const runtime = "nodejs";
 
@@ -101,14 +102,16 @@ export async function POST(
       const draft = await clearDraftSchedule(draftId);
       return NextResponse.json({ draft });
     }
+    if (action.action === "delete") {
+      if (existing.status === "published") {
+        throw new AppError("conflict", "Published drafts cannot be deleted");
+      }
+      await deleteDraft(draftId);
+      return NextResponse.json({ ok: true });
+    }
 
     requireCan(ctx, "publish");
-    if (!blueskyConfigured()) {
-      throw new AppError(
-        "not_configured",
-        "Bluesky is not configured — add credentials in the server environment.",
-      );
-    }
+    await assertPublishReady(ctx.workspaceId, existing.platform as PlatformId);
     try {
       const { draft, url } = await publishApprovedDraft(draftId);
       return NextResponse.json({ draft, url });

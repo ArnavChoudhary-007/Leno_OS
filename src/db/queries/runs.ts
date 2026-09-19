@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { asc, desc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { runSteps } from "@/db/schema";
 import type { RunStepName } from "@/shared/types";
@@ -40,5 +40,27 @@ export async function getRunSteps(campaignId: string): Promise<RunStep[]> {
     .select()
     .from(runSteps)
     .where(eq(runSteps.campaign_id, campaignId))
+    .orderBy(asc(runSteps.created_at));
+}
+
+export async function latestWorkspaceRunStep(
+  workspaceId: string,
+): Promise<RunStep | null> {
+  const [row] = await db
+    .select()
+    .from(runSteps)
+    .where(eq(runSteps.workspace_id, workspaceId))
+    .orderBy(desc(runSteps.created_at))
+    .limit(1);
+  return row ?? null;
+}
+
+export async function listWorkspaceRunSteps(
+  workspaceId: string,
+): Promise<RunStep[]> {
+  return db
+    .select()
+    .from(runSteps)
+    .where(eq(runSteps.workspace_id, workspaceId))
     .orderBy(asc(runSteps.created_at));
 }

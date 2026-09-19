@@ -23,7 +23,8 @@ export default async function CampaignPage({
       email={ctx.email}
       role={ctx.role}
       canMutate={canMutate}
-      current="campaign"
+      current="content"
+      workspaceId={ctx.workspaceId}
     >
       {campaign ? (
         <CampaignView campaignId={id} />

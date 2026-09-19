@@ -22,7 +22,10 @@ export function blueskyConfigured(): boolean {
  * Publishes one approved draft to Bluesky. Plain deterministic code —
  * agents must never call this. Only an approval/publish API may.
  */
-export async function publish(text: string): Promise<PublishResult> {
+export async function publish(
+  text: string,
+  image?: { bytes: Uint8Array; mime: string; alt?: string },
+): Promise<PublishResult> {
   const handle = env.BLUESKY_HANDLE?.trim();
   const password = env.BLUESKY_APP_PASSWORD?.trim();
 
@@ -48,10 +51,25 @@ export async function publish(text: string): Promise<PublishResult> {
   const richText = new RichText({ text: trimmed });
   await richText.detectFacets(agent);
 
+  let embed: { $type: "app.bsky.embed.images"; images: { alt: string; image: unknown }[] } | undefined;
+  if (image && image.bytes.byteLength > 0) {
+    const uploaded = await agent.uploadBlob(image.bytes, { encoding: image.mime });
+    embed = {
+      $type: "app.bsky.embed.images",
+      images: [
+        {
+          alt: image.alt?.trim() || "Campaign image",
+          image: uploaded.data.blob,
+        },
+      ],
+    };
+  }
+
   const result = await agent.post({
     text: richText.text,
     facets: richText.facets,
     createdAt: new Date().toISOString(),
+    ...(embed ? { embed } : {}),
   });
 
   return {

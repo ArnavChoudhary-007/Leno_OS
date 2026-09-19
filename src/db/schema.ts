@@ -97,6 +97,35 @@ export const rateLimitBuckets = pgTable("rate_limit_buckets", {
 });
 
 // ---------------------------------------------------------------------------
+// platform_connections — OAuth tokens per workspace (LinkedIn first)
+// ---------------------------------------------------------------------------
+
+export const platformConnections = pgTable(
+  "platform_connections",
+  {
+    id: id(),
+    workspace_id: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    platform: text("platform").notNull(),
+    account_name: text("account_name").notNull(),
+    account_urn: text("account_urn").notNull(),
+    access_token: text("access_token").notNull(),
+    refresh_token: text("refresh_token"),
+    expires_at: timestamptz("expires_at").notNull(),
+    scopes: text("scopes").notNull().default(""),
+    created_at: createdAt(),
+    updated_at: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("platform_connections_workspace_platform_uidx").on(
+      t.workspace_id,
+      t.platform,
+    ),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // brand_profile — one brand per workspace in v1
 // ---------------------------------------------------------------------------
 

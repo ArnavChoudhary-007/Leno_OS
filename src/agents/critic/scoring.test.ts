@@ -90,4 +90,15 @@ describe("hardGates", () => {
     assert.ok(failures.some((f) => f.includes("miracle")));
     assert.ok(failures.some((f) => f.includes("risk-free")));
   });
+
+  it("flags LinkedIn specialist violations", () => {
+    const draft: Draft = {
+      platform: "linkedin",
+      body: "We are thrilled to announce a seamless launch. Thoughts?",
+      hashtags: [],
+    };
+    const failures = hardGates(draft);
+    assert.ok(failures.some((f) => f.toLowerCase().includes("thrilled")));
+    assert.ok(failures.some((f) => f.toLowerCase().includes("inflated") || f.toLowerCase().includes("seamless")));
+  });
 });

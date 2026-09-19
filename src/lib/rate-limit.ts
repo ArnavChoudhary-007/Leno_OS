@@ -111,4 +111,14 @@ export const RATE_LIMITS = {
     max: 60,
     windowMs: 60 * 60 * 1000,
   }),
+  imageGenerate: (workspaceId: string): RateLimit => ({
+    key: `image_generate:${workspaceId}`,
+    max: 20,
+    windowMs: 60 * 60 * 1000,
+  }),
+  tavilySearch: (workspaceId: string): RateLimit => ({
+    key: `tavily_search:${workspaceId}`,
+    max: 30,
+    windowMs: 60 * 60 * 1000,
+  }),
 } as const;

@@ -1,0 +1,291 @@
+/* ==========================================================================
+   LENO OS - CONTENT EDITOR & REALISTIC PLATFORM PREVIEWS
+   ========================================================================== */
+
+.editor-drawer-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.editor-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+}
+
+.editor-drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* Realistic Platform Previews */
+.preview-container-box {
+  background: var(--bg-surface-subtle);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+}
+
+/* 1. LinkedIn Post Native Feed Preview */
+.linkedin-preview-card {
+  background: #ffffff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  font-family: -apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  color: #191919;
+  max-width: 520px;
+  margin: 0 auto;
+  overflow: hidden;
+}
+
+[data-theme="dark"] .linkedin-preview-card {
+  background: #1b1f23;
+  border-color: #333940;
+  color: #f3f3f3;
+}
+
+.linkedin-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px 8px;
+}
+
+.linkedin-author-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #0a66c2;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.linkedin-author-details {
+  display: flex;
+  flex-direction: column;
+}
+
+.linkedin-author-name {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: inherit;
+  line-height: 1.2;
+}
+
+.linkedin-author-title {
+  font-size: 0.74rem;
+  color: #666666;
+  line-height: 1.2;
+}
+
+[data-theme="dark"] .linkedin-author-title {
+  color: #999999;
+}
+
+.linkedin-body-text {
+  padding: 8px 16px 14px;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.linkedin-asset-preview {
+  width: 100%;
+  max-height: 280px;
+  object-fit: cover;
+  background: #f3f4f6;
+  border-top: 1px solid #e5e7eb;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.linkedin-reactions-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  border-top: 1px solid #e5e7eb;
+  font-size: 0.78rem;
+  color: #666666;
+}
+
+[data-theme="dark"] .linkedin-reactions-bar {
+  border-color: #333940;
+  color: #999999;
+}
+
+/* 2. Instagram Post Preview */
+.instagram-preview-card {
+  background: #ffffff;
+  border: 1px solid #dbdbdb;
+  border-radius: 10px;
+  max-width: 440px;
+  margin: 0 auto;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: #262626;
+}
+
+[data-theme="dark"] .instagram-preview-card {
+  background: #121212;
+  border-color: #262626;
+  color: #fafafa;
+}
+
+.instagram-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+}
+
+.instagram-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+  padding: 2px;
+}
+
+.instagram-avatar-inner {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: #262626;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.instagram-image-box {
+  width: 100%;
+  height: 320px;
+  background: #f0f2f5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.instagram-image-box img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.instagram-caption-box {
+  padding: 12px 14px;
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+/* 3. Twitter/X Post Preview */
+.twitter-preview-card {
+  background: #ffffff;
+  border: 1px solid #cfd9de;
+  border-radius: 16px;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 16px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: #0f1419;
+}
+
+[data-theme="dark"] .twitter-preview-card {
+  background: #000000;
+  border-color: #2f3336;
+  color: #e7e9ea;
+}
+
+.twitter-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.twitter-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #000000;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+}
+
+[data-theme="dark"] .twitter-avatar {
+  background: #ffffff;
+  color: #000000;
+}
+
+.twitter-names {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.twitter-name {
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.twitter-handle {
+  font-size: 0.84rem;
+  color: #536471;
+}
+
+.twitter-body {
+  font-size: 0.94rem;
+  line-height: 1.45;
+  margin-bottom: 12px;
+}
+
+/* AI Quality Scorecard */
+.ai-quality-panel {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  padding: 14px;
+  border-radius: var(--radius-md);
+  background: var(--bg-surface-subtle);
+  border: 1px solid var(--border-subtle);
+}
+
+.quality-score-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 2px;
+}
+
+.quality-score-val {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #10b981;
+}
+
+.quality-score-lbl {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}

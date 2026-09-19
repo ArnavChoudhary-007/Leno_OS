@@ -1,0 +1,156 @@
+/* ==========================================================================
+   LENO OS - ANALYTICS & PERFORMANCE
+   ========================================================================== */
+
+.analytics-container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.analytics-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.analytics-title {
+  font-size: 1.85rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+/* Analytics Metric Grid (5 Modules) */
+.analytics-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.kpi-stat-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 16px 20px;
+  box-shadow: var(--shadow-xs);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kpi-stat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.kpi-stat-label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.kpi-stat-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+.kpi-stat-change {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+/* Primary Graph Card */
+.analytics-chart-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  padding: 24px;
+  box-shadow: var(--shadow-xs);
+}
+
+.chart-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.analytics-area-svg {
+  width: 100%;
+  height: 240px;
+  overflow: visible;
+}
+
+/* Platform Comparison Grid */
+.analytics-split-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.platform-share-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  box-shadow: var(--shadow-xs);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.share-progress-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.share-row-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.84rem;
+  font-weight: 500;
+}
+
+.share-bar-track {
+  height: 8px;
+  width: 100%;
+  background: var(--bg-surface-subtle);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.share-bar-fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+}
+
+/* Top Performing Leaderboard Table */
+.top-content-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.top-content-table th {
+  padding: 10px 14px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-surface-subtle);
+}
+
+.top-content-table td {
+  padding: 12px 14px;
+  font-size: 0.84rem;
+  border-bottom: 1px solid var(--border-subtle);
+}

@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { campaigns } from "@/db/schema";
 import type { CampaignStatus, Plan } from "@/shared/types";
@@ -25,6 +25,34 @@ export async function insertCampaign(input: {
     })
     .returning();
   return row;
+}
+
+export async function listCampaignsInWorkspace(
+  workspaceId: string,
+  limit = 50,
+): Promise<Campaign[]> {
+  return db
+    .select()
+    .from(campaigns)
+    .where(eq(campaigns.workspace_id, workspaceId))
+    .orderBy(desc(campaigns.created_at))
+    .limit(limit);
+}
+
+export async function workspaceCampaignStats(workspaceId: string): Promise<{
+  running: number;
+  total: number;
+}> {
+  const rows = await db
+    .select({ status: campaigns.status })
+    .from(campaigns)
+    .where(eq(campaigns.workspace_id, workspaceId));
+
+  let running = 0;
+  for (const row of rows) {
+    if (row.status === "queued" || row.status === "running") running += 1;
+  }
+  return { running, total: rows.length };
 }
 
 export async function getCampaign(id: string): Promise<Campaign | null> {

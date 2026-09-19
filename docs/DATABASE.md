@@ -59,7 +59,7 @@ Strategy is **not** a campaign column. It lives in `run_steps` (`step = 'strateg
 | `version` | integer | 1 = first draft, +1 each revision |
 | `body` | text | Post text **without** hashtags |
 | `hashtags` | jsonb string[] | Stored separately so char limits and revisions stay accurate |
-| `image_url` | text, nullable | Instagram / LinkedIn creative (later) |
+| `image_url` | text, nullable | Per-platform cover-crop (`/api/media/campaigns/:id/:platform.jpg`) of the uploaded photo or a GPT Image 1.5 original (1024×1024). Empty if neither exists. |
 | `score` | real, nullable | Weighted critic score 0–1 |
 | `scores` | jsonb, nullable | `{ brand_voice, goal_fit, platform_fit, craft }` |
 | `critic_notes` | jsonb, nullable | `{ fix_list, gate_failures, rationale }` — not a flat string list |

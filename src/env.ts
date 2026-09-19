@@ -8,6 +8,10 @@
  */
 import { z } from "zod";
 
+function emptyToUndefined(value: unknown): unknown {
+  return value === "" ? undefined : value;
+}
+
 const envSchema = z.object({
   // Public origin for redirects and same-origin checks on mutating APIs.
   APP_URL: z.string().url().default("http://localhost:3000"),
@@ -38,9 +42,37 @@ const envSchema = z.object({
   WRITER_MODEL: z.string().min(1),
   CRITIC_MODEL: z.string().min(1),
 
+  // GPT Image 1.5 for campaign photos when the user did not upload one.
+  // Optional at boot so CI/Docker still compile; generation no-ops without them.
+  // Empty strings from a copied .env.example are treated as unset.
+  OPENAI_API_KEY: z.preprocess(
+    emptyToUndefined,
+    z.string().min(1).optional(),
+  ),
+  IMAGE_MODEL: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+  // OpenAI's square size. 1023×1024 is not a valid size — we cap at 1024×1024.
+  IMAGE_SIZE: z.preprocess(
+    (value) => (value === "" || value === undefined ? "1024x1024" : value),
+    z.literal("1024x1024"),
+  ),
+
   // Bluesky publishing (tools/social/bluesky.ts). Optional until you publish.
   BLUESKY_HANDLE: z.string().optional(),
   BLUESKY_APP_PASSWORD: z.string().optional(),
+
+  // Tavily — live web research for LinkedIn drafts. Optional; skipped if unset.
+  TAVILY_API_KEY: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+
+  // LinkedIn OAuth (Share on LinkedIn + Sign In with OpenID). Optional until
+  // a workspace connects an account. Redirect: ${APP_URL}/api/integrations/linkedin/callback
+  LINKEDIN_CLIENT_ID: z.preprocess(
+    emptyToUndefined,
+    z.string().min(1).optional(),
+  ),
+  LINKEDIN_CLIENT_SECRET: z.preprocess(
+    emptyToUndefined,
+    z.string().min(1).optional(),
+  ),
 });
 
 function loadEnv() {

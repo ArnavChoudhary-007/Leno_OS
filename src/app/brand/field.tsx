@@ -16,7 +16,7 @@ export function Field({
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-baseline justify-between gap-2">
-        <label htmlFor={htmlFor} className="text-sm font-medium text-foreground">
+        <label htmlFor={htmlFor} className="context-group-label">
           {label}
         </label>
         {hint ? <span className="text-xs text-muted-foreground">{hint}</span> : null}
@@ -29,8 +29,6 @@ export function Field({
   );
 }
 
-export const inputClass =
-  "h-10 w-full rounded-xl border border-border bg-card px-3.5 text-sm outline-none transition-shadow placeholder:text-muted-foreground/80 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40 disabled:opacity-60 aria-invalid:border-destructive";
+export const inputClass = "input-field w-full";
 
-export const textareaClass =
-  "w-full rounded-xl border border-border bg-card px-3.5 py-2.5 text-sm outline-none transition-shadow placeholder:text-muted-foreground/80 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40 disabled:opacity-60 aria-invalid:border-destructive";
+export const textareaClass = "input-field w-full min-h-28";

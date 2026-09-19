@@ -169,9 +169,21 @@ export const StrategySchema = z.object({
   platform_notes: PlatformNotesSchema,
 });
 
-// ---------------------------------------------------------------------------
-// Creative production
-// ---------------------------------------------------------------------------
+/** Feed crops stay inside the GPT Image 1.5 square cap (1024×1024). */
+export const IMAGE_MAX_EDGE = 1024;
+
+export const ImageFitSpecSchema = z.object({
+  width: z.number().int().positive().max(IMAGE_MAX_EDGE),
+  height: z.number().int().positive().max(IMAGE_MAX_EDGE),
+  ratio: z.string().min(1),
+});
+
+export const CoverCropBoxSchema = z.object({
+  left: z.number().int().nonnegative(),
+  top: z.number().int().nonnegative(),
+  width: z.number().int().positive(),
+  height: z.number().int().positive(),
+});
 
 export const DraftSchema = z.object({
   platform: PlatformIdSchema,
@@ -251,5 +263,25 @@ export const DraftReviewSchema = z.discriminatedUnion("action", [
     scheduled_at: z.string().datetime({ offset: true }),
   }),
   z.object({ action: z.literal("clear_schedule") }),
+  z.object({ action: z.literal("delete") }),
 ]);
+
+/** Which live channels this workspace can publish to. */
+export const PublishDestinationsSchema = z.object({
+  bluesky: z.boolean(),
+  linkedin: z.boolean(),
+});
+
+export const ResearchSourceSchema = z.object({
+  title: z.string(),
+  url: z.string(),
+  snippet: z.string(),
+});
+
+/** What the Tavily research step logs and feeds the LinkedIn writer. */
+export const ResearchBriefSchema = z.object({
+  query: z.string().min(1),
+  answer: z.string(),
+  sources: z.array(ResearchSourceSchema).max(5),
+});
 

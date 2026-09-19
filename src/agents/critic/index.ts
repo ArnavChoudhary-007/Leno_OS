@@ -2,6 +2,7 @@ import { CritiqueLLMSetSchema } from "@/shared/schemas";
 import type { Critique, CritiqueLLM, Draft, Plan } from "@/shared/types";
 import { generateStructured, type StructuredResult } from "@/tools/llm";
 import { composePost, validateDraft } from "../platforms";
+import { linkedinGateFailures } from "../platforms/linkedin-rules";
 import { playbookBlock, systemPrompt } from "../prompt";
 
 /**
@@ -50,6 +51,9 @@ export function hardGates(draft: Draft): string[] {
     if (lower.includes(term.toLowerCase())) {
       failures.push(`Remove the banned term "${term}"`);
     }
+  }
+  if (draft.platform === "linkedin") {
+    failures.push(...linkedinGateFailures(post));
   }
   return failures;
 }
@@ -104,6 +108,14 @@ export async function critique(
       "goal_fit: does it serve the goal and land the key message?",
       "platform_fit: is it native to that platform, not a repost of a generic caption?",
       "craft: is the hook strong, is it tight, would a real person stop scrolling?",
+      platforms.includes("linkedin")
+        ? [
+            "",
+            "For [linkedin] also check the specialist rules: no invented stories, no em dashes,",
+            "no inflated words, no AI formulas, no thrilled-to-announce openings, no Agree?/Thoughts? CTA.",
+            "Quote the offending phrase.",
+          ].join(" ")
+        : "",
       "",
       "fix_list: at most 5 specific fixes, each quoting the phrase at fault.",
       "Leave fix_list empty only when the post genuinely needs no changes.",

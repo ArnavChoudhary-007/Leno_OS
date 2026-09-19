@@ -7,6 +7,7 @@ import { facebookPlaybook } from "./facebook";
 import type { PlatformPlaybook } from "./types";
 
 export type { PlatformPlaybook } from "./types";
+export { applyLinkedInAgent } from "./linkedin-rules";
 
 /** Registry of every known platform playbook, including disabled ones. */
 export const PLATFORM_PLAYBOOKS: Record<PlatformId, PlatformPlaybook> = {

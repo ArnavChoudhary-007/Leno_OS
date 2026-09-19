@@ -3,10 +3,12 @@
  *
  *   npm run campaign:test
  *   npm run campaign:test -- --threshold=0.95        # force revision rounds
- *   npm run campaign:test -- --brief="Launch the..."
+ *   npm run campaign:test -- --image=./photo.jpg
  */
+import { readFile } from "node:fs/promises";
 import { runCampaign } from "@/agents/orchestrator";
 import { PLATFORM_PLAYBOOKS } from "@/agents/platforms";
+import { saveOriginalImage } from "@/creative/storage";
 import { client } from "@/db/client";
 import { getBrandProfile } from "@/db/queries/brand";
 import { getCampaign, insertCampaign } from "@/db/queries/campaigns";
@@ -56,6 +58,12 @@ async function main() {
     brief,
     brandId: brand?.id ?? null,
   });
+  const imagePath = arg("image");
+  if (imagePath) {
+    const bytes = await readFile(imagePath);
+    await saveOriginalImage(workspace.id, campaign.id, bytes);
+    console.log(`Image: ${imagePath} (will be cropped per platform)\n`);
+  }
   console.log(`Campaign ${campaign.id} — running...\n`);
 
   const started = Date.now();

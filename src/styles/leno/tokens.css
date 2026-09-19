@@ -1,0 +1,164 @@
+/* ==========================================================================
+   LENO OS - DESIGN TOKENS
+   Calm, restrained, premium SaaS design system
+   ========================================================================== */
+
+:root {
+  /* Color Palette - Light Theme (Default) */
+  --bg-app: #f4f6fa;
+  --bg-sidebar: #f8fafc;
+  --bg-surface: #ffffff;
+  --bg-surface-subtle: #f8fafc;
+  --bg-surface-elevated: #ffffff;
+  --bg-surface-hover: #f1f5f9;
+  --bg-surface-active: #e2e8f0;
+
+  /* Borders & Dividers */
+  --border-subtle: rgba(15, 23, 42, 0.06);
+  --border-medium: rgba(15, 23, 42, 0.12);
+  --border-focus: #0f172a;
+
+  /* Typography Colors */
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  --text-inverse: #ffffff;
+
+  /* Brand / Signature Leno Teal-Cyan Gradient */
+  --accent-primary: #0ea5e9;
+  --accent-hover: #0284c7;
+  --accent-surface: rgba(14, 165, 233, 0.08);
+  --accent-border: rgba(14, 165, 233, 0.25);
+  
+  /* Signature Leno Card Gradient (Matching Reference) */
+  --gradient-card: linear-gradient(135deg, #10b981 0%, #06b6d4 45%, #2563eb 100%);
+  --gradient-card-overlay: linear-gradient(135deg, rgba(16, 185, 129, 0.9) 0%, rgba(6, 182, 212, 0.85) 45%, rgba(37, 99, 235, 0.9) 100%);
+  --gradient-glow: radial-gradient(circle at top right, rgba(6, 182, 212, 0.15), transparent 70%);
+
+  /* State / Contextual Colors */
+  --status-neutral: #475569;
+  --status-neutral-bg: rgba(100, 116, 139, 0.08);
+  --status-neutral-border: rgba(100, 116, 139, 0.2);
+
+  --status-blue: #0284c7;
+  --status-blue-bg: rgba(2, 132, 199, 0.08);
+  --status-blue-border: rgba(2, 132, 199, 0.2);
+
+  --status-purple: #7c3aed;
+  --status-purple-bg: rgba(124, 58, 237, 0.08);
+  --status-purple-border: rgba(124, 58, 237, 0.2);
+
+  --status-green: #059669;
+  --status-green-bg: rgba(5, 150, 105, 0.08);
+  --status-green-border: rgba(5, 150, 105, 0.2);
+
+  --status-amber: #b45309;
+  --status-amber-bg: rgba(217, 119, 6, 0.08);
+  --status-amber-border: rgba(217, 119, 6, 0.2);
+
+  --status-red: #dc2626;
+  --status-red-bg: rgba(220, 38, 38, 0.08);
+  --status-red-border: rgba(220, 38, 38, 0.2);
+
+  /* Platform Colors */
+  --platform-linkedin: #0a66c2;
+  --platform-linkedin-bg: rgba(10, 102, 194, 0.08);
+  --platform-instagram: #e1306c;
+  --platform-instagram-bg: rgba(225, 48, 108, 0.08);
+  --platform-twitter: #0f1419;
+  --platform-twitter-bg: rgba(15, 20, 25, 0.08);
+
+  /* Shadows - Minimal & Restrained */
+  --shadow-xs: 0 1px 2px 0 rgba(15, 23, 42, 0.03);
+  --shadow-sm: 0 2px 4px -1px rgba(15, 23, 42, 0.04), 0 1px 2px -1px rgba(15, 23, 42, 0.02);
+  --shadow-md: 0 4px 12px -2px rgba(15, 23, 42, 0.06), 0 2px 6px -2px rgba(15, 23, 42, 0.03);
+  --shadow-lg: 0 12px 24px -4px rgba(15, 23, 42, 0.08), 0 4px 8px -2px rgba(15, 23, 42, 0.03);
+  --shadow-card-hover: 0 8px 20px -3px rgba(15, 23, 42, 0.08);
+
+  /* Typography */
+  --font-sans: var(--font-jakarta), "Plus Jakarta Sans", "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+
+  /* Radius */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+
+  /* Layout Measurements */
+  --sidebar-width: 220px;
+  --topbar-height: 64px;
+  --content-max-width: 1440px;
+
+  /* Transitions */
+  --transition-fast: 120ms cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-normal: 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-slow: 320ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ==========================================================================
+   DARK THEME (Sleek Charcoal, Perfectly Balanced Contrast)
+   ========================================================================== */
+[data-theme="dark"],
+.dark {
+  --bg-app: #0b0f17;
+  --bg-sidebar: #0f1523;
+  --bg-surface: #141b2d;
+  --bg-surface-subtle: #182035;
+  --bg-surface-elevated: #1a2238;
+  --bg-surface-hover: #1e2842;
+  --bg-surface-active: #253352;
+
+  --border-subtle: rgba(255, 255, 255, 0.07);
+  --border-medium: rgba(255, 255, 255, 0.12);
+  --border-focus: #ffffff;
+
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --text-inverse: #0f172a;
+
+  --accent-primary: #38bdf8;
+  --accent-hover: #7dd3fc;
+  --accent-surface: rgba(56, 189, 248, 0.12);
+  --accent-border: rgba(56, 189, 248, 0.3);
+
+  --gradient-card: linear-gradient(135deg, #059669 0%, #0891b2 45%, #1d4ed8 100%);
+  --gradient-card-overlay: linear-gradient(135deg, rgba(5, 150, 105, 0.85) 0%, rgba(8, 145, 178, 0.85) 45%, rgba(29, 78, 216, 0.85) 100%);
+  --gradient-glow: radial-gradient(circle at top right, rgba(56, 189, 248, 0.1), transparent 70%);
+
+  --status-neutral: #94a3b8;
+  --status-neutral-bg: rgba(148, 163, 184, 0.12);
+  --status-neutral-border: rgba(148, 163, 184, 0.2);
+
+  --status-blue: #38bdf8;
+  --status-blue-bg: rgba(56, 189, 248, 0.12);
+  --status-blue-border: rgba(56, 189, 248, 0.25);
+
+  --status-purple: #a78bfa;
+  --status-purple-bg: rgba(167, 139, 250, 0.12);
+  --status-purple-border: rgba(167, 139, 250, 0.25);
+
+  --status-green: #34d399;
+  --status-green-bg: rgba(52, 211, 153, 0.12);
+  --status-green-border: rgba(52, 211, 153, 0.25);
+
+  --status-amber: #fbbf24;
+  --status-amber-bg: rgba(251, 191, 36, 0.12);
+  --status-amber-border: rgba(251, 191, 36, 0.25);
+
+  --status-red: #f87171;
+  --status-red-bg: rgba(248, 113, 113, 0.12);
+  --status-red-border: rgba(248, 113, 113, 0.25);
+
+  --platform-twitter: #f8fafc;
+  --platform-twitter-bg: rgba(248, 250, 252, 0.1);
+
+  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.2);
+  --shadow-sm: 0 2px 4px -1px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 4px 12px -2px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 12px 24px -4px rgba(0, 0, 0, 0.45);
+  --shadow-card-hover: 0 8px 20px -3px rgba(0, 0, 0, 0.45);
+}

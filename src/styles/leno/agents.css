@@ -1,0 +1,195 @@
+/* ==========================================================================
+   LENO OS - AGENTS & ORCHESTRATOR ARCHITECTURE
+   ========================================================================== */
+
+.agents-container {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.agents-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.agents-title {
+  font-size: 1.85rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.agents-subtitle {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+/* Orchestration Visual Flow Diagram */
+.orchestration-flow-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  padding: 28px;
+  box-shadow: var(--shadow-xs);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.flow-diagram-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+  padding: 20px 10px;
+  overflow-x: auto;
+}
+
+.flow-node-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+  z-index: 2;
+  min-width: 130px;
+}
+
+.flow-node-icon-circle {
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  box-shadow: var(--shadow-sm);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-medium);
+  transition: all var(--transition-fast);
+}
+
+.flow-node-box:hover .flow-node-icon-circle {
+  transform: translateY(-2px);
+  border-color: var(--accent-primary);
+}
+
+.flow-node-label {
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.flow-node-sub {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.flow-connector-line {
+  flex: 1;
+  height: 2px;
+  background: repeating-linear-gradient(90deg, var(--border-medium) 0, var(--border-medium) 6px, transparent 6px, transparent 12px);
+  position: relative;
+  margin: 0 8px;
+}
+
+/* Agent Cards Grid */
+.agents-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 20px;
+}
+
+.agent-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 22px;
+  box-shadow: var(--shadow-xs);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.agent-card:hover {
+  border-color: var(--border-medium);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+}
+
+.agent-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.agent-card-identity {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.agent-avatar-box {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+.agent-avatar-box svg {
+  display: block;
+  border-radius: inherit;
+}
+
+.agent-info-names {
+  display: flex;
+  flex-direction: column;
+}
+
+.agent-title-text {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.agent-persona-tag {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+
+.agent-card-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  background: var(--bg-surface-subtle);
+  border: 1px solid var(--border-subtle);
+}
+
+.agent-stat-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.agent-stat-num {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.agent-stat-name {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}

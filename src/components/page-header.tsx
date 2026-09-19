@@ -15,15 +15,13 @@ export function PageHeader({
     <div className="flex flex-wrap items-start justify-between gap-4">
       <div className="max-w-2xl">
         {eyebrow ? (
-          <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+          <p className="section-micro-label" style={{ marginBottom: 6 }}>
             {eyebrow}
           </p>
         ) : null}
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight">{title}</h1>
+        <h1 className="create-cockpit-title">{title}</h1>
         {description ? (
-          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-            {description}
-          </p>
+          <p className="create-cockpit-subtitle">{description}</p>
         ) : null}
       </div>
       {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}

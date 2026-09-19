@@ -41,6 +41,9 @@ See `.env.example`. Validated at startup by `src/env.ts` (set
 | `GROQ_API_KEY` | Groq API key for the critic (**required**). |
 | `WRITER_MODEL` | e.g. `gemini-3.5-flash-lite` (**required**). |
 | `CRITIC_MODEL` | e.g. `openai/gpt-oss-20b` (**required**). |
+| `OPENAI_API_KEY` | OpenAI key for GPT Image 1.5 (optional until you generate photos). |
+| `IMAGE_MODEL` | e.g. `gpt-image-1.5` (required with the OpenAI key). |
+| `IMAGE_SIZE` | `1024x1024` only — generation is capped at that square. |
 | `BLUESKY_HANDLE` | Bluesky handle (optional until you publish). |
 | `BLUESKY_APP_PASSWORD` | Bluesky app password (optional until you publish). |
 

@@ -14,6 +14,8 @@ import {
   requestIdFrom,
 } from "@/lib/http";
 import { AppError } from "@/shared/errors";
+import { blueskyConfigured } from "@/tools/social/bluesky";
+import { linkedinConnected } from "@/tools/social/linkedin";
 import { startCampaignRun } from "@/workflows/campaign-run";
 
 export const runtime = "nodejs";
@@ -38,15 +40,20 @@ export async function GET(
     const campaign = await getCampaignInWorkspace(ctx.workspaceId, id);
     if (!campaign) throw new AppError("not_found", "Campaign not found");
 
-    const [steps, drafts] = await Promise.all([
+    const [steps, drafts, linkedin] = await Promise.all([
       getRunSteps(id),
       getLatestDraftsByPlatform(id),
+      linkedinConnected(ctx.workspaceId),
     ]);
 
     const res = NextResponse.json({
       campaign,
       steps: redactSteps(steps, isAdminRole(ctx.role)),
       drafts,
+      destinations: {
+        bluesky: blueskyConfigured(),
+        linkedin,
+      },
     });
     res.headers.set("x-request-id", requestId);
     return res;

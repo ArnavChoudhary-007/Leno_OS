@@ -5,7 +5,9 @@ import type { RunStepName } from "@/shared/types";
 const STEP_LABEL: Record<RunStepName, string> = {
   plan: "Plan",
   strategy: "Strategy",
+  research: "Research",
   draft: "Draft",
+  image: "Image",
   critique: "Critique",
   revise: "Revise",
   error: "Error",
@@ -23,13 +25,28 @@ export type TimelineStep = {
 export function StepTimeline({ steps }: { steps: TimelineStep[] }) {
   if (steps.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground">
-        Waiting for the first pipeline step…
-      </p>
+      <p className="card-subtitle">Waiting for the first pipeline step…</p>
     );
   }
 
+  const last = steps[steps.length - 1];
+
   return (
+    <>
+      <div className="pipeline-stage-bar" style={{ marginBottom: 16 }}>
+        {steps.map((step) => {
+          const label = STEP_LABEL[step.step as RunStepName] ?? step.step;
+          return (
+            <div
+              key={step.id}
+              className={`pipeline-stage-pill${step.id === last?.id ? " active" : ""}`}
+            >
+              <span className="stage-name-box">{label}</span>
+              <span className="stage-count-badge">{step.duration_ms}ms</span>
+            </div>
+          );
+        })}
+      </div>
     <ol className="space-y-0">
       {steps.map((step, index) => {
         const label = STEP_LABEL[step.step as RunStepName] ?? step.step;
@@ -73,5 +90,6 @@ export function StepTimeline({ steps }: { steps: TimelineStep[] }) {
         );
       })}
     </ol>
+    </>
   );
 }

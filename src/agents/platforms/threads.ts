@@ -10,4 +10,5 @@ export const threadsPlaybook: PlatformPlaybook = {
   formatNotes:
     "Conversational, single topic tag at most. Written to invite replies, not just views.",
   toneNotes: "Casual, direct, a bit unfiltered. Fine to be opinionated.",
+  imageSpec: { width: 1024, height: 1024, ratio: "1:1" },
 };

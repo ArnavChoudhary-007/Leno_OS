@@ -1,0 +1,152 @@
+/* ==========================================================================
+   LENO OS - INTEGRATIONS & PLATFORM ACCOUNTS
+   ========================================================================== */
+
+.integrations-container {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.integrations-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.integrations-title {
+  font-size: 1.85rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.integrations-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 20px;
+}
+
+.integration-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 22px;
+  box-shadow: var(--shadow-xs);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  transition: all var(--transition-fast);
+}
+
+.integration-card:hover {
+  border-color: var(--border-medium);
+}
+
+.integration-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.integration-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.integration-logo-box {
+  width: 42px;
+  height: 42px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+.integration-logo-box svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.integration-names {
+  display: flex;
+  flex-direction: column;
+}
+
+.integration-name {
+  font-size: 0.98rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.integration-account-handle {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.integration-card-body {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.integration-meta-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  background: var(--bg-surface-subtle);
+  border-radius: var(--radius-sm);
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+
+.integration-meta-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.integration-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.integration-actions-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+
+.integration-footer-note {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.integration-banner {
+  font-size: 0.88rem;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+}
+
+.integration-banner-ok {
+  background: color-mix(in srgb, var(--success, #16a34a) 10%, transparent);
+  color: var(--text-primary);
+}
+
+.integration-banner-error {
+  background: color-mix(in srgb, var(--destructive, #dc2626) 10%, transparent);
+  color: var(--text-primary);
+}

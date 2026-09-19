@@ -23,6 +23,11 @@ import type {
   WorkspaceRoleSchema,
   PlatformNotesSchema,
   StrategySchema,
+  ImageFitSpecSchema,
+  CoverCropBoxSchema,
+  PublishDestinationsSchema,
+  ResearchBriefSchema,
+  ResearchSourceSchema,
 } from "./schemas";
 
 export type PlatformId = z.infer<typeof PlatformIdSchema>;
@@ -38,6 +43,8 @@ export type CampaignBrief = z.infer<typeof CampaignBriefSchema>;
 export type Plan = z.infer<typeof PlanSchema>;
 export type PlatformNotes = z.infer<typeof PlatformNotesSchema>;
 export type Strategy = z.infer<typeof StrategySchema>;
+export type ImageFitSpec = z.infer<typeof ImageFitSpecSchema>;
+export type CoverCropBox = z.infer<typeof CoverCropBoxSchema>;
 
 export type Draft = z.infer<typeof DraftSchema>;
 export type DraftSet = z.infer<typeof DraftSetSchema>;
@@ -48,11 +55,16 @@ export type CritiqueLLM = z.infer<typeof CritiqueLLMSchema>;
 export type CritiqueLLMSet = z.infer<typeof CritiqueLLMSetSchema>;
 export type Critique = z.infer<typeof CritiqueSchema>;
 export type CriticNotes = z.infer<typeof CriticNotesSchema>;
+export type PublishDestinations = z.infer<typeof PublishDestinationsSchema>;
+export type ResearchSource = z.infer<typeof ResearchSourceSchema>;
+export type ResearchBrief = z.infer<typeof ResearchBriefSchema>;
 
 export type RunStepName =
   | "plan"
   | "strategy"
+  | "research"
   | "draft"
+  | "image"
   | "critique"
   | "revise"
   | "error";

@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import { BrandMark } from "@/components/brand-mark";
-import { WorkflowHero } from "@/components/workflow-hero";
 
 export function AuthFrame({
   title,
@@ -12,24 +11,23 @@ export function AuthFrame({
   children: ReactNode;
 }) {
   return (
-    <main className="mx-auto grid min-h-screen w-full max-w-5xl items-center gap-12 px-6 py-16 lg:grid-cols-[1fr_320px]">
-      <div className="mx-auto w-full max-w-sm lg:mx-0">
-        <div className="mb-8 flex items-center gap-2.5">
+    <main className="auth-page">
+      <div className="auth-card">
+        <div
+          className="sidebar-brand"
+          style={{ border: "none", margin: 0, padding: "0 0 24px" }}
+        >
           <BrandMark />
-          <span className="text-sm font-semibold tracking-tight">
-            Distribution OS
+          <span className="brand-text-block">
+            <span className="brand-title">Leno OS</span>
+            <span className="brand-subtitle">Distribution</span>
           </span>
         </div>
-        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
-        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-          {description}
-        </p>
-        <div className="surface mt-8 rounded-2xl border border-border p-6">
+        <h1 className="create-cockpit-title">{title}</h1>
+        <p className="create-cockpit-subtitle">{description}</p>
+        <div className="card" style={{ marginTop: 24 }}>
           {children}
         </div>
-      </div>
-      <div className="hidden lg:block">
-        <WorkflowHero />
       </div>
     </main>
   );

@@ -24,7 +24,7 @@ export default async function BrandPage() {
       role={ctx.role}
       canMutate={canMutate}
       current="brand"
-      width="wide"
+      workspaceId={ctx.workspaceId}
     >
       <PageHeader
         eyebrow="Brand"
@@ -40,7 +40,7 @@ export default async function BrandPage() {
         />
       ) : null}
 
-      <div className="mt-8">
+      <div className="card mt-8">
         <BrandForm
           key={profile?.updated_at ?? "empty"}
           profile={profile}

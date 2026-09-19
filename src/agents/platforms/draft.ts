@@ -3,6 +3,7 @@ import type { Critique, Draft, Plan, PlatformId, Strategy } from "@/shared/types
 import { generateStructured, type StructuredResult } from "@/tools/llm";
 import { playbookBlock, systemPrompt } from "../prompt";
 import { PLATFORM_PLAYBOOKS } from ".";
+import { applyLinkedInAgent } from "./linkedin-rules";
 
 const WRITER_ROLE =
   "You are the staff writer for a social distribution system. You write posts that sound like a person, not a brand deck.";
@@ -31,6 +32,7 @@ export async function draftAll(
   plan: Plan,
   strategy: Strategy,
   brandCard: string,
+  researchBlock?: string,
 ): Promise<StructuredResult<Draft[]>> {
   const result = await generateStructured({
     role: "writer",
@@ -47,6 +49,7 @@ export async function draftAll(
       "",
       "PLATFORM PLAYBOOKS — the character limits are hard failures:",
       playbookBlock(plan.platforms),
+      ...(researchBlock ? ["", researchBlock] : []),
       "",
       "Match the voice in the brand's example posts. Respect its do's and don'ts.",
       "body: the post text WITHOUT hashtags.",
@@ -56,7 +59,12 @@ export async function draftAll(
     ].join("\n"),
   });
 
-  return { ...result, object: dedupeByPlatform(result.object.drafts, plan.platforms) };
+  return {
+    ...result,
+    object: dedupeByPlatform(result.object.drafts, plan.platforms).map(
+      applyLinkedInAgent,
+    ),
+  };
 }
 
 /**
@@ -68,6 +76,7 @@ export async function reviseDrafts(
   plan: Plan,
   strategy: Strategy,
   brandCard: string,
+  researchBlock?: string,
 ): Promise<StructuredResult<Draft[]>> {
   const platforms = failing.map((f) => f.draft.platform);
 
@@ -83,6 +92,7 @@ export async function reviseDrafts(
       "",
       "PLATFORM PLAYBOOKS:",
       playbookBlock(platforms),
+      ...(researchBlock ? ["", researchBlock] : []),
       "",
       "FAILED DRAFTS AND WHAT'S WRONG WITH THEM:",
       ...failing.map((f) =>
@@ -103,7 +113,12 @@ export async function reviseDrafts(
     ].join("\n"),
   });
 
-  return { ...result, object: dedupeByPlatform(result.object.drafts, platforms) };
+  return {
+    ...result,
+    object: dedupeByPlatform(result.object.drafts, platforms).map(
+      applyLinkedInAgent,
+    ),
+  };
 }
 
 /**

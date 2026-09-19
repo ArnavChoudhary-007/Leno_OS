@@ -4,13 +4,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/empty-state";
-import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiErrorMessage } from "@/lib/api-error";
 import { cn } from "@/lib/utils";
-import type { CampaignStatus, Plan } from "@/shared/types";
+import type { CampaignStatus, Plan, PublishDestinations } from "@/shared/types";
 import { DraftCard, type DraftCardData } from "./draft-card";
 import { StepTimeline, type TimelineStep } from "./step-timeline";
 
@@ -25,6 +24,7 @@ type CampaignPayload = {
   };
   steps: TimelineStep[];
   drafts: DraftCardData[];
+  destinations?: PublishDestinations;
 };
 
 const TERMINAL: CampaignStatus[] = ["ready", "needs_human", "failed"];
@@ -203,45 +203,43 @@ export function CampaignView({ campaignId }: { campaignId: string }) {
   const live = !TERMINAL.includes(campaign.status);
 
   return (
-    <div>
-      <PageHeader
-        eyebrow="Campaign"
-        title="Live run"
-        description="Brief, plan, pipeline, then drafts — nothing publishes until you say so."
-        actions={
-          <div className="flex items-center gap-2">
-            <Badge
-              variant={statusVariant(campaign.status)}
-              live={live}
+    <div className="track-page-container">
+      <header className="track-header">
+        <div>
+          <h1 className="track-title">Live run</h1>
+          <p className="track-subtitle">
+            Brief, plan, pipeline, then drafts — nothing publishes until you say so.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Badge variant={statusVariant(campaign.status)} live={live}>
+            {statusLabel(campaign.status)}
+          </Badge>
+          {(campaign.status === "failed" ||
+            campaign.status === "needs_human" ||
+            campaign.status === "ready") && (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={retrying}
+              onClick={() => void retry()}
             >
-              {statusLabel(campaign.status)}
-            </Badge>
-            {(campaign.status === "failed" ||
-              campaign.status === "needs_human" ||
-              campaign.status === "ready") && (
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={retrying}
-                onClick={() => void retry()}
-              >
-                {retrying ? "Retrying…" : "Retry run"}
-              </Button>
-            )}
-          </div>
-        }
-      />
+              {retrying ? "Retrying…" : "Retry run"}
+            </Button>
+          )}
+        </div>
+      </header>
 
-      <section className="surface mt-8 rounded-2xl border border-border p-5">
-        <h2 className="text-sm font-semibold">Brief</h2>
+      <section className="card">
+        <h2 className="card-title">Brief</h2>
         <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
           {campaign.brief}
         </p>
       </section>
 
       {campaign.plan ? (
-        <section className="mt-6">
-          <h2 className="text-sm font-semibold">Plan</h2>
+        <section>
+          <h2 className="module-title">Plan</h2>
           <dl className="mt-3 grid gap-3 sm:grid-cols-2">
             {(
               [
@@ -251,21 +249,16 @@ export function CampaignView({ campaignId }: { campaignId: string }) {
                 ["Platforms", campaign.plan.platforms.join(", ")],
               ] as const
             ).map(([label, value]) => (
-              <div
-                key={label}
-                className="surface-sm rounded-xl border border-border px-4 py-3"
-              >
-                <dt className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                  {label}
-                </dt>
+              <div key={label} className="card" style={{ padding: 16 }}>
+                <dt className="section-micro-label">{label}</dt>
                 <dd className="mt-1 text-sm leading-relaxed">{value}</dd>
               </div>
             ))}
           </dl>
         </section>
       ) : live ? (
-        <section className="mt-6">
-          <h2 className="text-sm font-semibold">Plan</h2>
+        <section>
+          <h2 className="module-title">Plan</h2>
           <div className="mt-3 space-y-2">
             <Skeleton className="h-16 w-full rounded-xl" />
             <Skeleton className="h-16 w-2/3 rounded-xl" />
@@ -273,15 +266,15 @@ export function CampaignView({ campaignId }: { campaignId: string }) {
         </section>
       ) : null}
 
-      <section className="surface mt-8 rounded-2xl border border-border p-5">
-        <h2 className="text-sm font-semibold">Pipeline</h2>
+      <section className="card">
+        <h2 className="card-title">Pipeline</h2>
         <div className="mt-4">
           <StepTimeline steps={steps} />
         </div>
       </section>
 
-      <section className="mt-10">
-        <h2 className="text-sm font-semibold">
+      <section>
+        <h2 className="module-title">
           Drafts{drafts.length ? ` · ${drafts.length}` : ""}
         </h2>
         {drafts.length === 0 ? (
@@ -303,7 +296,12 @@ export function CampaignView({ campaignId }: { campaignId: string }) {
         ) : (
           <div className="mt-4 grid gap-4">
             {drafts.map((draft) => (
-              <DraftCard key={draft.id} draft={draft} onChanged={load} />
+              <DraftCard
+                key={draft.id}
+                draft={draft}
+                destinations={data.destinations}
+                onChanged={load}
+              />
             ))}
           </div>
         )}

@@ -13,6 +13,12 @@ import {
 import { logStep } from "@/db/queries/runs";
 import { buildBrandCard, getCompanyContext } from "@/memory/context";
 import type { Critique, Draft, Plan, PlatformId, Strategy } from "@/shared/types";
+import { fitCampaignImages } from "@/creative/fit-campaign";
+import {
+  formatResearchBlock,
+  researchForLinkedIn,
+  tavilyConfigured,
+} from "@/tools/tavily";
 import { critique, MAX_REVISION_ROUNDS, PASS_THRESHOLD } from "../critic";
 import { draftAll, reviseDrafts } from "../platforms/draft";
 import { strategy as buildStrategy } from "../strategy";
@@ -46,9 +52,13 @@ function critiquesByPlatform(critiques: Critique[]): Map<PlatformId, Critique> {
 /**
  * Orchestrator loop:
  *
- *   plan -> strategy -> draftAll -> critique -> [revise -> critique] x3 -> done
+ *   plan -> strategy -> research (Tavily, LinkedIn only) -> draftAll
+ *     -> image (GPT Image 1.5 if no upload)
+ *     -> critique -> [revise -> critique] x3 -> done
  *
  * Four LLM calls minimum, ten maximum — never one call per platform.
+ * Image generation is a separate OpenAI Images call, not an agent.
+ * Tavily research is optional enrichment; a miss never fails the run.
  * Drafts that still fail after the last round are handed to a human.
  *
  * Hard rule: nothing in here publishes. Publishing is deterministic code
@@ -74,9 +84,8 @@ export async function runCampaign(
       throw new Error(`Campaign ${campaignId} not found`);
     }
 
-    const brandCard = buildBrandCard(
-      await getCompanyContext(campaign.workspace_id),
-    );
+    const brand = await getCompanyContext(campaign.workspace_id);
+    const brandCard = buildBrandCard(brand);
 
     // 1. Plan
     const planned = await runStep(campaignId, "plan", () =>
@@ -91,12 +100,70 @@ export async function runCampaign(
     );
     const strategy: Strategy = strategised.object;
 
+    let researchBlock: string | undefined;
+    if (plan.platforms.includes("linkedin") && tavilyConfigured()) {
+      const started = Date.now();
+      const research = await researchForLinkedIn({
+        workspaceId: campaign.workspace_id,
+        brandName: brand.name,
+        brief: campaign.brief,
+        audience: plan.audience,
+        keyMessage: plan.key_message,
+        angle: strategy.angle,
+        competitors: brand.competitors,
+      });
+      if (research) {
+        researchBlock = formatResearchBlock(research);
+        await logStep(
+          campaignId,
+          "research",
+          "tavily",
+          {
+            query: research.query,
+            answer: research.answer,
+            sources: research.sources.map((source) => ({
+              title: source.title,
+              url: source.url,
+            })),
+          },
+          Date.now() - started,
+          campaign.workspace_id,
+        );
+      }
+    }
+
     // 3. Draft every platform in one call
     const drafted = await runStep(campaignId, "draft", () =>
-      draftAll(plan, strategy, brandCard),
+      draftAll(plan, strategy, brandCard, researchBlock),
     );
     if (drafted.object.length === 0) {
       throw new Error("The writer returned no drafts");
+    }
+
+    const fitted = await fitCampaignImages(
+      campaign.workspace_id,
+      campaignId,
+      drafted.object.map((d) => d.platform),
+      {
+        brandName: brand.name,
+        oneLiner: brand.one_liner,
+        brief: campaign.brief,
+        keyMessage: plan.key_message,
+        primaryColor: brand.primary_color,
+        secondaryColor: brand.secondary_color,
+        toneWords: brand.tone_words,
+      },
+    );
+    const imageUrls = fitted.urls;
+    if (fitted.generation) {
+      await logStep(
+        campaignId,
+        "image",
+        fitted.generation.model,
+        { size: fitted.generation.size },
+        fitted.generation.ms,
+        campaign.workspace_id,
+      );
     }
 
     const rows = await insertDrafts(
@@ -107,6 +174,7 @@ export async function runCampaign(
         version: 1,
         body: draft.body,
         hashtags: draft.hashtags,
+        image_url: imageUrls[draft.platform] ?? null,
       })),
     );
 
@@ -147,6 +215,7 @@ export async function runCampaign(
           plan,
           strategy,
           brandCard,
+          researchBlock,
         ),
       );
       if (revised.object.length === 0) break;
@@ -159,6 +228,7 @@ export async function runCampaign(
           version: (slots.get(draft.platform)?.version ?? 1) + 1,
           body: draft.body,
           hashtags: draft.hashtags,
+          image_url: imageUrls[draft.platform] ?? null,
         })),
       );
 

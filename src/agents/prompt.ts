@@ -1,4 +1,5 @@
 import { getEnabledPlaybooks } from "./platforms";
+import { LINKEDIN_WRITING_RULES } from "./platforms/linkedin-rules";
 
 /**
  * Every agent gets the same company context in its system prompt, plus
@@ -21,7 +22,7 @@ export function systemPrompt(role: string, brandCard: string): string {
 
 /** Playbook block for the platforms in play, used by the writer and critic. */
 export function playbookBlock(platforms: string[]): string {
-  return getEnabledPlaybooks()
+  const body = getEnabledPlaybooks()
     .filter((p) => platforms.includes(p.id))
     .map((p) =>
       [
@@ -31,9 +32,22 @@ export function playbookBlock(platforms: string[]): string {
         `  format: ${p.formatNotes}`,
         `  tone: ${p.toneNotes}`,
         p.requiresImage ? "  ships with an image — write the caption" : null,
+        p.imageSpec
+          ? `  image: ${p.imageSpec.ratio} (${p.imageSpec.width}×${p.imageSpec.height}), cover-cropped from the campaign photo (GPT Image 1.5 when none was uploaded)`
+          : null,
       ]
         .filter(Boolean)
         .join("\n"),
     )
     .join("\n\n");
+
+  if (!platforms.includes("linkedin")) return body;
+
+  return [
+    body,
+    "",
+    "=== LINKEDIN SPECIALIST ===",
+    LINKEDIN_WRITING_RULES,
+    "=== END LINKEDIN SPECIALIST ===",
+  ].join("\n");
 }
