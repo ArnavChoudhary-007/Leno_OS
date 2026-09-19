@@ -6,6 +6,12 @@
 import { z } from "zod";
 
 const envSchema = z.object({
+  // Supabase project API (Settings → API). Server-only; do not prefix
+  // SUPABASE_SERVICE_ROLE_KEY with NEXT_PUBLIC_.
+  SUPABASE_URL: z.string().url(),
+  SUPABASE_ANON_KEY: z.string().min(1),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
+
   // Supabase Postgres, via postgres.js + Drizzle. Copy the URI from
   // Project Settings → Database (prefer Session/Direct for migrations;
   // Transaction pooler is fine for the app). See .env.example.

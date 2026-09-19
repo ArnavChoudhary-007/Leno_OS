@@ -33,6 +33,9 @@ See `.env.example`. Validated at startup by `src/env.ts` (set
 
 | Variable | Purpose |
 | --- | --- |
+| `SUPABASE_URL` | Supabase project URL (`https://[ref].supabase.co`). |
+| `SUPABASE_ANON_KEY` | Supabase anon (public) API key. |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service-role key (server only; never expose to the browser). |
 | `DATABASE_URL` | Supabase Postgres URI (`postgres://` or `postgresql://`). Prefer Session/Direct for migrations; Transaction pooler is fine for the app. |
 | `GOOGLE_GENERATIVE_AI_API_KEY` | Gemini API key for the writer model. |
 | `GROQ_API_KEY` | Groq API key for the critic model. |
