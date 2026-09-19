@@ -1,9 +1,16 @@
 import { pgTable, text, integer, real, jsonb, timestamp } from "drizzle-orm/pg-core";
+import {
+  CampaignStatusSchema,
+  DraftStatusSchema,
+  RunPhaseSchema,
+} from "@/shared/schemas";
 import type {
   CampaignStatus,
+  CampaignSummary,
   Critique,
   DraftStatus,
   Plan,
+  RunPhase,
 } from "@/shared/types";
 
 const id = () =>
@@ -16,21 +23,15 @@ const createdAt = () =>
     .notNull()
     .defaultNow();
 
-const CAMPAIGN_STATUSES = [
-  "queued",
-  "running",
-  "needs_human",
-  "ready",
-  "failed",
-] as const;
+// Enum values come from the zod schemas so there is one source of truth.
+// zod hands back a plain array; drizzle's enum config wants a non-empty tuple.
+function enumValues<T extends string>(values: readonly T[]): [T, ...T[]] {
+  return values as unknown as [T, ...T[]];
+}
 
-const DRAFT_STATUSES = [
-  "draft",
-  "needs_human",
-  "approved",
-  "rejected",
-  "published",
-] as const;
+const CAMPAIGN_STATUSES = enumValues(CampaignStatusSchema.options);
+const DRAFT_STATUSES = enumValues(DraftStatusSchema.options);
+const RUN_PHASES = enumValues(RunPhaseSchema.options);
 
 // ---------------------------------------------------------------------------
 // brand_profile — the company context shared by every agent
@@ -70,6 +71,13 @@ export const campaigns = pgTable("campaigns", {
     .notNull()
     .$type<CampaignStatus>()
     .default("queued"),
+  /** What the run delivered, per platform, plus totals. Written at the end. */
+  summary: jsonb("summary").$type<CampaignSummary | null>(),
+  /** The exact brand card the agents saw, kept so a run stays reproducible. */
+  brand_snapshot: text("brand_snapshot"),
+  llm_calls: integer("llm_calls").notNull().default(0),
+  started_at: timestamp("started_at", { withTimezone: true, mode: "string" }),
+  finished_at: timestamp("finished_at", { withTimezone: true, mode: "string" }),
   created_at: createdAt(),
 });
 
@@ -98,6 +106,8 @@ export const drafts = pgTable("drafts", {
     mode: "string",
   }),
   published_url: text("published_url"),
+  /** A human's revision request, if this version came from one. */
+  review_note: text("review_note"),
   created_at: createdAt(),
 });
 
@@ -110,8 +120,12 @@ export const runSteps = pgTable("run_steps", {
   campaign_id: text("campaign_id")
     .notNull()
     .references(() => campaigns.id),
+  /** Which of the eight orchestrator phases this step belongs to. */
+  phase: text("phase", { enum: RUN_PHASES }).$type<RunPhase | null>(),
+  /** What ran inside that phase. */
   step: text("step").notNull(),
-  model: text("model").notNull(),
+  /** The model that answered, or null for phases that are plain code. */
+  model: text("model"),
   output: jsonb("output").notNull().$type<unknown>(),
   duration_ms: integer("duration_ms").notNull().default(0),
   created_at: createdAt(),

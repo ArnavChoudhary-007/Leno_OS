@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
+import { recoverStuckRuns } from "@/agents/orchestrator/recover";
 import { getCampaign } from "@/db/queries/campaigns";
-import { getLatestDraftsByPlatform } from "@/db/queries/drafts";
+import { getCurrentDraftsByPlatform } from "@/db/queries/drafts";
 import { getRunSteps } from "@/db/queries/runs";
 
 // Uses the DB — Node runtime, never edge.
@@ -12,6 +13,11 @@ export async function GET(
 ) {
   const { id } = await params;
 
+  // Anyone polling a campaign is a good moment to reclaim dead runs.
+  await recoverStuckRuns().catch((err) =>
+    console.error("[api] stuck-run recovery failed:", err),
+  );
+
   const campaign = await getCampaign(id);
   if (!campaign) {
     return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
@@ -19,7 +25,7 @@ export async function GET(
 
   const [steps, drafts] = await Promise.all([
     getRunSteps(id),
-    getLatestDraftsByPlatform(id),
+    getCurrentDraftsByPlatform(id),
   ]);
 
   return NextResponse.json({ campaign, steps, drafts });
