@@ -12,7 +12,6 @@ import { buildBrandCard, getCompanyContext } from "@/memory/context";
 import { StrategySchema } from "@/shared/schemas";
 import type { Critique, Draft, PlatformId, Strategy } from "@/shared/types";
 import { critique, PASS_THRESHOLD } from "../critic";
-import { composePost } from "../platforms";
 import { reviseDrafts } from "../platforms/draft";
 
 export type NoteRevisionResult = {
@@ -52,7 +51,8 @@ export async function reviseWithNote(
   const platform = before.platform as PlatformId;
   const plan = { ...campaign.plan, platforms: [platform] };
   const brandCard =
-    campaign.brand_snapshot ?? buildBrandCard(await getCompanyContext());
+    campaign.brand_snapshot ??
+    buildBrandCard(await getCompanyContext(campaign.workspace_id));
   const strategy = await loadStrategy(before.campaign_id);
 
   await saveReviewNote(draftId, note);
@@ -66,17 +66,17 @@ export async function reviseWithNote(
       platform_fit: 0,
       craft: 0,
     },
-    fix_list: [note, ...(before.critic_notes ?? [])],
+    fix_list: [note, ...(before.critic_notes?.fix_list ?? [])],
     rationale: "A human asked for this change.",
     weighted: before.score ?? 0,
-    gate_failures: [],
+    gate_failures: before.critic_notes?.gate_failures ?? [],
     pass: false,
   };
 
   const asDraft: Draft = {
     platform,
     body: before.body,
-    hashtags: [],
+    hashtags: before.hashtags ?? [],
   };
 
   await countLlmCall(before.campaign_id);
@@ -96,14 +96,18 @@ export async function reviseWithNote(
     revised.model,
     { source: "human", note, drafts: revised.object },
     revised.ms,
+    before.workspace_id,
   );
 
   const [after] = await insertDrafts([
     {
+      workspace_id: before.workspace_id,
       campaign_id: before.campaign_id,
       platform,
       version: before.version + 1,
-      body: composePost(newDraft),
+      body: newDraft.body,
+      hashtags: newDraft.hashtags,
+      image_url: before.image_url,
       review_note: note,
     },
   ]);
@@ -119,6 +123,7 @@ export async function reviseWithNote(
     scored.model,
     { source: "human", critiques: scored.object },
     scored.ms,
+    before.workspace_id,
   );
 
   await updateDraftCritique(

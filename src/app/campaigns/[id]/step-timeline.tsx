@@ -3,20 +3,23 @@
 import type { RunStepName } from "@/shared/types";
 
 const STEP_LABEL: Record<RunStepName, string> = {
+  load_context: "Context",
   plan: "Plan",
   strategy: "Strategy",
+  roster: "Agents",
   research: "Research",
   draft: "Draft",
   image: "Image",
   critique: "Critique",
   revise: "Revise",
+  summary: "Deliver",
   error: "Error",
 };
 
 export type TimelineStep = {
   id: string;
   step: string;
-  model: string;
+  model: string | null;
   duration_ms: number;
   created_at: string;
   output: unknown;
@@ -76,7 +79,7 @@ export function StepTimeline({ steps }: { steps: TimelineStep[] }) {
               <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                 <span className="text-sm font-medium">{label}</span>
                 <span className="font-mono text-xs text-muted-foreground">
-                  {step.model === "-" ? "—" : step.model}
+                  {!step.model || step.model === "-" ? "—" : step.model}
                 </span>
                 <span className="text-xs tabular-nums text-muted-foreground">
                   {step.duration_ms}ms

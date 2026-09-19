@@ -8,11 +8,8 @@ import type {
   BrandProfileSchema,
   CampaignBriefSchema,
   CampaignStatusSchema,
-<<<<<<< HEAD
-  CriticNotesSchema,
-=======
   CampaignSummarySchema,
->>>>>>> origin/main
+  CriticNotesSchema,
   CritiqueLLMSchema,
   CritiqueLLMSetSchema,
   CritiqueSchema,
@@ -39,13 +36,10 @@ import type {
 export type PlatformId = z.infer<typeof PlatformIdSchema>;
 export type CampaignStatus = z.infer<typeof CampaignStatusSchema>;
 export type DraftStatus = z.infer<typeof DraftStatusSchema>;
-<<<<<<< HEAD
 export type WorkspaceRole = z.infer<typeof WorkspaceRoleSchema>;
 export type ErrorCode = z.infer<typeof ErrorCodeSchema>;
-=======
 export type RunPhase = z.infer<typeof RunPhaseSchema>;
 export type ReviewNote = z.infer<typeof ReviewNoteSchema>;
->>>>>>> origin/main
 
 export type BrandProfile = z.infer<typeof BrandProfileSchema>;
 export type BrandProfileInput = z.infer<typeof BrandProfileInputSchema>;
@@ -71,12 +65,16 @@ export type PublishDestinations = z.infer<typeof PublishDestinationsSchema>;
 export type ResearchSource = z.infer<typeof ResearchSourceSchema>;
 export type ResearchBrief = z.infer<typeof ResearchBriefSchema>;
 
+/** What ran inside a phase. Code-only phases log a step with no model. */
 export type RunStepName =
+  | "load_context"
   | "plan"
   | "strategy"
+  | "roster"
   | "research"
   | "draft"
   | "image"
   | "critique"
   | "revise"
+  | "summary"
   | "error";

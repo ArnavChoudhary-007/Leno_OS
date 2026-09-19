@@ -38,6 +38,8 @@ function statusLabel(status: DraftStatus): string {
       return "Rejected";
     case "published":
       return "Published";
+    case "superseded":
+      return "Replaced";
   }
 }
 

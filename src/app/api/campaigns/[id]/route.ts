@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-<<<<<<< HEAD
+import { recoverStuckRuns } from "@/agents/orchestrator/recover";
 import { requireAuthContext, requireCan } from "@/auth/server";
 import { isAdminRole } from "@/authz/can";
 import {
   getCampaignInWorkspace,
   requeueCampaign,
 } from "@/db/queries/campaigns";
-import { getLatestDraftsByPlatform } from "@/db/queries/drafts";
+import { getCurrentDraftsByPlatform } from "@/db/queries/drafts";
 import { getRunSteps, type RunStep } from "@/db/queries/runs";
 import {
   assertSameOrigin,
@@ -18,12 +18,6 @@ import { AppError } from "@/shared/errors";
 import { blueskyConfigured } from "@/tools/social/bluesky";
 import { linkedinConnected } from "@/tools/social/linkedin";
 import { startCampaignRun } from "@/workflows/campaign-run";
-=======
-import { recoverStuckRuns } from "@/agents/orchestrator/recover";
-import { getCampaign } from "@/db/queries/campaigns";
-import { getCurrentDraftsByPlatform } from "@/db/queries/drafts";
-import { getRunSteps } from "@/db/queries/runs";
->>>>>>> origin/main
 
 export const runtime = "nodejs";
 
@@ -44,13 +38,17 @@ export async function GET(
     const ctx = await requireAuthContext();
     const { id } = await params;
 
-<<<<<<< HEAD
+    // Anyone polling a campaign is a good moment to reclaim dead runs.
+    await recoverStuckRuns().catch((err) =>
+      console.error("[api] stuck-run recovery failed:", err),
+    );
+
     const campaign = await getCampaignInWorkspace(ctx.workspaceId, id);
     if (!campaign) throw new AppError("not_found", "Campaign not found");
 
     const [steps, drafts, linkedin] = await Promise.all([
       getRunSteps(id),
-      getLatestDraftsByPlatform(id),
+      getCurrentDraftsByPlatform(id),
       linkedinConnected(ctx.workspaceId),
     ]);
 
@@ -108,22 +106,4 @@ export async function POST(
     }
     return catchRouteError(err, requestId);
   }
-=======
-  // Anyone polling a campaign is a good moment to reclaim dead runs.
-  await recoverStuckRuns().catch((err) =>
-    console.error("[api] stuck-run recovery failed:", err),
-  );
-
-  const campaign = await getCampaign(id);
-  if (!campaign) {
-    return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
-  }
-
-  const [steps, drafts] = await Promise.all([
-    getRunSteps(id),
-    getCurrentDraftsByPlatform(id),
-  ]);
-
-  return NextResponse.json({ campaign, steps, drafts });
->>>>>>> origin/main
 }

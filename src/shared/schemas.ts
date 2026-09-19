@@ -31,7 +31,8 @@ export const DRAFT_STATUSES = [
   "approved",
   "rejected",
   "published",
-<<<<<<< HEAD
+  /** An older version of a platform's post, replaced by a newer one. */
+  "superseded",
 ] as const;
 
 export const CampaignStatusSchema = z.enum(CAMPAIGN_STATUSES);
@@ -63,14 +64,9 @@ export const SignInSchema = z.object({
 export const InviteAcceptSchema = z.object({
   token: z.string().trim().min(16).max(128),
 });
-=======
-  /** An older version of a platform's post, replaced by a newer one. */
-  "superseded",
-]);
->>>>>>> origin/main
 
 /** The eight orchestrator phases, plus error. Recorded on every run step. */
-export const RunPhaseSchema = z.enum([
+export const RUN_PHASES = [
   "understand",
   "define_goal",
   "plan",
@@ -80,7 +76,8 @@ export const RunPhaseSchema = z.enum([
   "iterate",
   "deliver",
   "error",
-]);
+] as const;
+export const RunPhaseSchema = z.enum(RUN_PHASES);
 
 /** What a finished run delivered. Built in code, stored on the campaign. */
 export const CampaignSummarySchema = z.object({

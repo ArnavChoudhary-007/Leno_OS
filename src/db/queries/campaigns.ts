@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-import { and, desc, eq } from "drizzle-orm";
-=======
-import { and, eq, sql } from "drizzle-orm";
->>>>>>> origin/main
+import { and, desc, eq, isNull, lt, or, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { campaigns } from "@/db/schema";
 import type { CampaignStatus, CampaignSummary, Plan } from "@/shared/types";
@@ -68,7 +64,6 @@ export async function getCampaign(id: string): Promise<Campaign | null> {
   return row ?? null;
 }
 
-<<<<<<< HEAD
 export async function getCampaignInWorkspace(
   workspaceId: string,
   id: string,
@@ -78,23 +73,6 @@ export async function getCampaignInWorkspace(
     .from(campaigns)
     .where(and(eq(campaigns.id, id), eq(campaigns.workspace_id, workspaceId)))
     .limit(1);
-=======
-/**
- * Takes ownership of a queued campaign in a single statement. Returns null
- * if someone else already claimed it — this is what stops two runs of the
- * same campaign, so it must stay one atomic UPDATE.
- */
-export async function claimCampaign(id: string): Promise<Campaign | null> {
-  const [row] = await db
-    .update(campaigns)
-    .set({
-      status: "running",
-      started_at: new Date().toISOString(),
-      finished_at: null,
-    })
-    .where(and(eq(campaigns.id, id), eq(campaigns.status, "queued")))
-    .returning();
->>>>>>> origin/main
   return row ?? null;
 }
 
@@ -105,7 +83,6 @@ export async function updateCampaignStatus(
   await db.update(campaigns).set({ status }).where(eq(campaigns.id, id));
 }
 
-<<<<<<< HEAD
 /**
  * The planner produces one Plan. `goal` stores the goal statement for
  * display/filter; `plan` stores the full object.
@@ -114,70 +91,6 @@ export async function saveCampaignPlan(id: string, plan: Plan): Promise<void> {
   await db
     .update(campaigns)
     .set({ goal: plan.goal, plan })
-    .where(eq(campaigns.id, id));
-}
-
-function isStaleRunning(campaign: Campaign, now = Date.now()): boolean {
-  if (campaign.status !== "running") return false;
-  if (!campaign.started_at) return true;
-  return now - new Date(campaign.started_at).getTime() >= STALE_RUNNING_MS;
-}
-
-/**
- * Atomically claims a campaign for an orchestrator run.
- * - `queued` → claim
- * - `running` past STALE_RUNNING_MS → reclaim (process likely died)
- * - anything else → refuse (active run or already finished)
- *
- * Returns true when this caller owns the run.
- */
-export async function claimCampaign(
-  id: string,
-  now = new Date(),
-): Promise<boolean> {
-  const campaign = await getCampaign(id);
-  if (!campaign) {
-    throw new Error(`Campaign ${id} not found`);
-  }
-
-  const mayClaim =
-    campaign.status === "queued" || isStaleRunning(campaign, now.getTime());
-  if (!mayClaim) return false;
-
-  await db
-    .update(campaigns)
-    .set({
-      status: "running",
-      started_at: now.toISOString(),
-    })
-    .where(eq(campaigns.id, id));
-  return true;
-}
-
-/**
- * Puts a finished or failed campaign back on the queue so it can be retried.
- * Refuses campaigns that are still actively running (not stale).
- */
-export async function requeueCampaign(id: string): Promise<Campaign | null> {
-  const campaign = await getCampaign(id);
-  if (!campaign) return null;
-
-  if (campaign.status === "running" && !isStaleRunning(campaign)) {
-    throw new Error("Campaign is still running");
-  }
-  if (campaign.status === "queued") return campaign;
-
-  const [row] = await db
-    .update(campaigns)
-    .set({ status: "queued", started_at: null })
-    .where(eq(campaigns.id, id))
-    .returning();
-  return row ?? null;
-=======
-export async function saveCampaignPlan(id: string, plan: Plan): Promise<void> {
-  await db
-    .update(campaigns)
-    .set({ goal: plan, plan })
     .where(eq(campaigns.id, id));
 }
 
@@ -210,6 +123,69 @@ export async function finishCampaign(
     .where(eq(campaigns.id, id));
 }
 
+/**
+ * Takes ownership of a campaign in a single statement. Returns null if
+ * someone else already owns it — this is what stops two runs of the same
+ * campaign, so it must stay one atomic UPDATE.
+ *
+ * Claimable: a `queued` campaign, or a `running` one whose last claim is
+ * older than STALE_RUNNING_MS (the process behind it almost certainly
+ * died). The staleness clause is the backstop for a run that slipped past
+ * `recoverStuckRuns`.
+ */
+export async function claimCampaign(
+  id: string,
+  now = new Date(),
+): Promise<Campaign | null> {
+  const staleBefore = new Date(now.getTime() - STALE_RUNNING_MS).toISOString();
+
+  const [row] = await db
+    .update(campaigns)
+    .set({
+      status: "running",
+      started_at: now.toISOString(),
+      finished_at: null,
+    })
+    .where(
+      and(
+        eq(campaigns.id, id),
+        or(
+          eq(campaigns.status, "queued"),
+          and(
+            eq(campaigns.status, "running"),
+            or(
+              isNull(campaigns.started_at),
+              lt(campaigns.started_at, staleBefore),
+            ),
+          ),
+        ),
+      ),
+    )
+    .returning();
+  return row ?? null;
+}
+
+/**
+ * Puts a finished or failed campaign back on the queue so it can be retried.
+ * Refuses campaigns that are still actively running (not stale).
+ */
+export async function requeueCampaign(id: string): Promise<Campaign | null> {
+  const campaign = await getCampaign(id);
+  if (!campaign) return null;
+
+  if (campaign.status === "running" && !isStaleRunning(campaign)) {
+    throw new Error("Campaign is still running");
+  }
+  if (campaign.status === "queued") return campaign;
+
+  const [row] = await db
+    .update(campaigns)
+    .set({ status: "queued", started_at: null, finished_at: null })
+    .where(eq(campaigns.id, id))
+    .returning();
+  return row ?? null;
+}
+
 /** Only a failed campaign may be retried; returns null if it isn't one. */
 export async function requeueFailedCampaign(
   id: string,
@@ -224,5 +200,10 @@ export async function requeueFailedCampaign(
 
 export async function getRunningCampaigns(): Promise<Campaign[]> {
   return db.select().from(campaigns).where(eq(campaigns.status, "running"));
->>>>>>> origin/main
+}
+
+function isStaleRunning(campaign: Campaign, now = Date.now()): boolean {
+  if (campaign.status !== "running") return false;
+  if (!campaign.started_at) return true;
+  return now - new Date(campaign.started_at).getTime() >= STALE_RUNNING_MS;
 }
