@@ -31,6 +31,7 @@ export const DRAFT_STATUSES = [
   "approved",
   "rejected",
   "published",
+<<<<<<< HEAD
 ] as const;
 
 export const CampaignStatusSchema = z.enum(CAMPAIGN_STATUSES);
@@ -61,6 +62,53 @@ export const SignInSchema = z.object({
 
 export const InviteAcceptSchema = z.object({
   token: z.string().trim().min(16).max(128),
+});
+=======
+  /** An older version of a platform's post, replaced by a newer one. */
+  "superseded",
+]);
+>>>>>>> origin/main
+
+/** The eight orchestrator phases, plus error. Recorded on every run step. */
+export const RunPhaseSchema = z.enum([
+  "understand",
+  "define_goal",
+  "plan",
+  "select_agents",
+  "execute",
+  "evaluate",
+  "iterate",
+  "deliver",
+  "error",
+]);
+
+/** What a finished run delivered. Built in code, stored on the campaign. */
+export const CampaignSummarySchema = z.object({
+  platforms: z.array(
+    z.object({
+      platform: PlatformIdSchema,
+      draft_id: z.string(),
+      version: z.number().int(),
+      score: z.number().nullable(),
+      pass: z.boolean(),
+      rounds_used: z.number().int(),
+      status: DraftStatusSchema,
+    }),
+  ),
+  totals: z.object({
+    llm_calls: z.number().int(),
+    duration_ms: z.number().int(),
+    models_used: z.array(z.string()),
+  }),
+});
+
+/** A human's note attached to a draft, asking for a specific revision. */
+export const ReviewNoteSchema = z.object({
+  note: z
+    .string()
+    .trim()
+    .min(5, "Note must be at least 5 characters")
+    .max(1000, "Note must be at most 1000 characters"),
 });
 
 // ---------------------------------------------------------------------------

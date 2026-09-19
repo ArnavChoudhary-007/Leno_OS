@@ -1,7 +1,11 @@
+<<<<<<< HEAD
 import { and, desc, eq } from "drizzle-orm";
+=======
+import { and, eq, sql } from "drizzle-orm";
+>>>>>>> origin/main
 import { db } from "@/db/client";
 import { campaigns } from "@/db/schema";
-import type { CampaignStatus, Plan } from "@/shared/types";
+import type { CampaignStatus, CampaignSummary, Plan } from "@/shared/types";
 
 export type Campaign = typeof campaigns.$inferSelect;
 
@@ -64,6 +68,7 @@ export async function getCampaign(id: string): Promise<Campaign | null> {
   return row ?? null;
 }
 
+<<<<<<< HEAD
 export async function getCampaignInWorkspace(
   workspaceId: string,
   id: string,
@@ -73,6 +78,23 @@ export async function getCampaignInWorkspace(
     .from(campaigns)
     .where(and(eq(campaigns.id, id), eq(campaigns.workspace_id, workspaceId)))
     .limit(1);
+=======
+/**
+ * Takes ownership of a queued campaign in a single statement. Returns null
+ * if someone else already claimed it — this is what stops two runs of the
+ * same campaign, so it must stay one atomic UPDATE.
+ */
+export async function claimCampaign(id: string): Promise<Campaign | null> {
+  const [row] = await db
+    .update(campaigns)
+    .set({
+      status: "running",
+      started_at: new Date().toISOString(),
+      finished_at: null,
+    })
+    .where(and(eq(campaigns.id, id), eq(campaigns.status, "queued")))
+    .returning();
+>>>>>>> origin/main
   return row ?? null;
 }
 
@@ -83,6 +105,7 @@ export async function updateCampaignStatus(
   await db.update(campaigns).set({ status }).where(eq(campaigns.id, id));
 }
 
+<<<<<<< HEAD
 /**
  * The planner produces one Plan. `goal` stores the goal statement for
  * display/filter; `plan` stores the full object.
@@ -150,4 +173,56 @@ export async function requeueCampaign(id: string): Promise<Campaign | null> {
     .where(eq(campaigns.id, id))
     .returning();
   return row ?? null;
+=======
+export async function saveCampaignPlan(id: string, plan: Plan): Promise<void> {
+  await db
+    .update(campaigns)
+    .set({ goal: plan, plan })
+    .where(eq(campaigns.id, id));
+}
+
+export async function saveBrandSnapshot(
+  id: string,
+  brandCard: string,
+): Promise<void> {
+  await db
+    .update(campaigns)
+    .set({ brand_snapshot: brandCard })
+    .where(eq(campaigns.id, id));
+}
+
+/** Counted in the database so parallel work can't lose an increment. */
+export async function countLlmCall(id: string): Promise<void> {
+  await db
+    .update(campaigns)
+    .set({ llm_calls: sql`${campaigns.llm_calls} + 1` })
+    .where(eq(campaigns.id, id));
+}
+
+export async function finishCampaign(
+  id: string,
+  status: CampaignStatus,
+  summary: CampaignSummary | null,
+): Promise<void> {
+  await db
+    .update(campaigns)
+    .set({ status, summary, finished_at: new Date().toISOString() })
+    .where(eq(campaigns.id, id));
+}
+
+/** Only a failed campaign may be retried; returns null if it isn't one. */
+export async function requeueFailedCampaign(
+  id: string,
+): Promise<Campaign | null> {
+  const [row] = await db
+    .update(campaigns)
+    .set({ status: "queued", finished_at: null })
+    .where(and(eq(campaigns.id, id), eq(campaigns.status, "failed")))
+    .returning();
+  return row ?? null;
+}
+
+export async function getRunningCampaigns(): Promise<Campaign[]> {
+  return db.select().from(campaigns).where(eq(campaigns.status, "running"));
+>>>>>>> origin/main
 }

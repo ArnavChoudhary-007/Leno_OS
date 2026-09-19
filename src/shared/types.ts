@@ -8,7 +8,11 @@ import type {
   BrandProfileSchema,
   CampaignBriefSchema,
   CampaignStatusSchema,
+<<<<<<< HEAD
   CriticNotesSchema,
+=======
+  CampaignSummarySchema,
+>>>>>>> origin/main
   CritiqueLLMSchema,
   CritiqueLLMSetSchema,
   CritiqueSchema,
@@ -22,6 +26,8 @@ import type {
   PlatformIdSchema,
   WorkspaceRoleSchema,
   PlatformNotesSchema,
+  ReviewNoteSchema,
+  RunPhaseSchema,
   StrategySchema,
   ImageFitSpecSchema,
   CoverCropBoxSchema,
@@ -33,13 +39,19 @@ import type {
 export type PlatformId = z.infer<typeof PlatformIdSchema>;
 export type CampaignStatus = z.infer<typeof CampaignStatusSchema>;
 export type DraftStatus = z.infer<typeof DraftStatusSchema>;
+<<<<<<< HEAD
 export type WorkspaceRole = z.infer<typeof WorkspaceRoleSchema>;
 export type ErrorCode = z.infer<typeof ErrorCodeSchema>;
+=======
+export type RunPhase = z.infer<typeof RunPhaseSchema>;
+export type ReviewNote = z.infer<typeof ReviewNoteSchema>;
+>>>>>>> origin/main
 
 export type BrandProfile = z.infer<typeof BrandProfileSchema>;
 export type BrandProfileInput = z.infer<typeof BrandProfileInputSchema>;
 
 export type CampaignBrief = z.infer<typeof CampaignBriefSchema>;
+export type CampaignSummary = z.infer<typeof CampaignSummarySchema>;
 export type Plan = z.infer<typeof PlanSchema>;
 export type PlatformNotes = z.infer<typeof PlatformNotesSchema>;
 export type Strategy = z.infer<typeof StrategySchema>;

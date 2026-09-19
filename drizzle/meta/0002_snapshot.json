@@ -1,5 +1,9 @@
 {
+<<<<<<< HEAD
   "id": "12e84917-e2d7-433e-aa76-a040fde94856",
+=======
+  "id": "8c6a11fc-5602-4088-8455-c9f0503fb987",
+>>>>>>> origin/main
   "prevId": "2e1f77e9-e5d8-42a9-a344-05f3779bbb27",
   "version": "7",
   "dialect": "postgresql",
@@ -120,7 +124,11 @@
         },
         "goal": {
           "name": "goal",
+<<<<<<< HEAD
           "type": "text",
+=======
+          "type": "jsonb",
+>>>>>>> origin/main
           "primaryKey": false,
           "notNull": false
         },
@@ -137,6 +145,40 @@
           "notNull": true,
           "default": "'queued'"
         },
+<<<<<<< HEAD
+=======
+        "summary": {
+          "name": "summary",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "brand_snapshot": {
+          "name": "brand_snapshot",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "llm_calls": {
+          "name": "llm_calls",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "finished_at": {
+          "name": "finished_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+>>>>>>> origin/main
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -188,6 +230,7 @@
           "primaryKey": false,
           "notNull": true
         },
+<<<<<<< HEAD
         "hashtags": {
           "name": "hashtags",
           "type": "jsonb",
@@ -195,6 +238,8 @@
           "notNull": true,
           "default": "'[]'::jsonb"
         },
+=======
+>>>>>>> origin/main
         "image_url": {
           "name": "image_url",
           "type": "text",
@@ -226,12 +271,15 @@
           "notNull": true,
           "default": "'draft'"
         },
+<<<<<<< HEAD
         "review_note": {
           "name": "review_note",
           "type": "text",
           "primaryKey": false,
           "notNull": false
         },
+=======
+>>>>>>> origin/main
         "scheduled_at": {
           "name": "scheduled_at",
           "type": "timestamp with time zone",
@@ -244,6 +292,15 @@
           "primaryKey": false,
           "notNull": false
         },
+<<<<<<< HEAD
+=======
+        "review_note": {
+          "name": "review_note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+>>>>>>> origin/main
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -252,6 +309,7 @@
           "default": "now()"
         }
       },
+<<<<<<< HEAD
       "indexes": {
         "drafts_campaign_platform_version_uidx": {
           "name": "drafts_campaign_platform_version_uidx",
@@ -281,6 +339,9 @@
           "with": {}
         }
       },
+=======
+      "indexes": {},
+>>>>>>> origin/main
       "foreignKeys": {
         "drafts_campaign_id_campaigns_id_fk": {
           "name": "drafts_campaign_id_campaigns_id_fk",
@@ -292,7 +353,11 @@
           "columnsTo": [
             "id"
           ],
+<<<<<<< HEAD
           "onDelete": "cascade",
+=======
+          "onDelete": "no action",
+>>>>>>> origin/main
           "onUpdate": "no action"
         }
       },
@@ -318,6 +383,15 @@
           "primaryKey": false,
           "notNull": true
         },
+<<<<<<< HEAD
+=======
+        "phase": {
+          "name": "phase",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+>>>>>>> origin/main
         "step": {
           "name": "step",
           "type": "text",
@@ -328,7 +402,11 @@
           "name": "model",
           "type": "text",
           "primaryKey": false,
+<<<<<<< HEAD
           "notNull": true
+=======
+          "notNull": false
+>>>>>>> origin/main
         },
         "output": {
           "name": "output",
@@ -351,6 +429,7 @@
           "default": "now()"
         }
       },
+<<<<<<< HEAD
       "indexes": {
         "run_steps_campaign_created_idx": {
           "name": "run_steps_campaign_created_idx",
@@ -374,6 +453,9 @@
           "with": {}
         }
       },
+=======
+      "indexes": {},
+>>>>>>> origin/main
       "foreignKeys": {
         "run_steps_campaign_id_campaigns_id_fk": {
           "name": "run_steps_campaign_id_campaigns_id_fk",
@@ -385,7 +467,11 @@
           "columnsTo": [
             "id"
           ],
+<<<<<<< HEAD
           "onDelete": "cascade",
+=======
+          "onDelete": "no action",
+>>>>>>> origin/main
           "onUpdate": "no action"
         }
       },
