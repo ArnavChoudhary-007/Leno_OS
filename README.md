@@ -8,7 +8,7 @@ learning from performance. See `docs/ARCHITECTURE.md` for the full design
 and `AGENTS.md` for the hard rules this codebase follows.
 
 This is currently groundwork only — project scaffold, database, schemas,
-config, and typed stubs. No agent logic is implemented yet.
+config, and typed stubs. Database design is locked in `docs/DATABASE.md`.
 
 ## Local setup
 

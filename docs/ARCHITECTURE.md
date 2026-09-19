@@ -87,7 +87,8 @@ only for a draft with `status = 'approved'`.
 - `src/workflows/campaign-run.ts` — starts a campaign run in the background
   via `after()`
 - `src/db/` — Drizzle schema (`brand_profile`, `campaigns`, `drafts`,
-  `run_steps`) on Supabase Postgres, client, and seed script
+  `run_steps`) on Supabase Postgres, client, and seed script. Locked
+  design: `docs/DATABASE.md`.
 - `src/shared/schemas.ts` / `src/shared/types.ts` — every zod schema in the
   app, and the types inferred from them
 - `Dockerfile`, `docker-compose.yml` — the container image and the

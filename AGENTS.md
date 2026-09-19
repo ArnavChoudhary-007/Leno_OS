@@ -43,7 +43,8 @@ the rubric constants and `src/agents/orchestrator/index.ts` for the loop.
 - `src/tools/` — `llm.ts` (model registry), `social/bluesky.ts` (publish)
 - `src/memory/context.ts` — loads the brand profile for agent prompts
 - `src/workflows/campaign-run.ts` — starts a campaign run in the background
-- `src/db/` — Drizzle schema (Postgres/pgTable), client, seed
+- `src/db/` — Drizzle schema (Postgres/pgTable), client, seed. Locked
+ design in `docs/DATABASE.md`.
 - `src/shared/` — `schemas.ts` (all zod schemas), `types.ts` (inferred
  types), `brand-card.ts` (the text every agent prompt is built from)
 - `src/env.ts` — zod-validated environment variables
