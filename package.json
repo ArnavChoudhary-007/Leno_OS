@@ -14,7 +14,8 @@
     "db:push": "drizzle-kit push",
     "db:seed": "tsx src/db/seed.ts",
     "db:studio": "drizzle-kit studio",
-    "context:print": "tsx scripts/print-context.ts"
+    "context:print": "tsx scripts/print-context.ts",
+    "campaign:test": "tsx scripts/run-campaign.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^4.0.75",

@@ -36,15 +36,16 @@ the rubric constants and `src/agents/orchestrator/index.ts` for the loop.
 ## Folder map
 
 - `src/app/` — pages and route handlers (App Router)
-- `src/agents/` — orchestrator, brand, research, strategy, critic, and one
-  module per platform (`agents/platforms/`)
+- `src/agents/` — orchestrator, strategy, critic, and one module per
+  platform (`agents/platforms/`). Brand/audience and research agents are
+  planned but not built; don't leave empty stubs for them.
 - `src/creative/templates/` — branded image templates (later)
 - `src/tools/` — `llm.ts` (model registry), `social/bluesky.ts` (publish)
 - `src/memory/context.ts` — loads the brand profile for agent prompts
 - `src/workflows/campaign-run.ts` — starts a campaign run in the background
 - `src/db/` — Drizzle schema (Postgres/pgTable), client, seed
 - `src/shared/` — `schemas.ts` (all zod schemas), `types.ts` (inferred
-  types), `utils.ts`
+  types), `brand-card.ts` (the text every agent prompt is built from)
 - `src/env.ts` — zod-validated environment variables
 - `docker-compose.dev.yml` / `docker-compose.yml` / `Dockerfile` — local
   Postgres and the production stack (Postgres + migrate + app) on EC2

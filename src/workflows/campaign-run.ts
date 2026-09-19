@@ -1,17 +1,13 @@
 import { after } from "next/server";
+import { runCampaign } from "@/agents/orchestrator";
 
 /**
- * Kicks off a campaign run in the background after a request (e.g. the
- * campaign-create API route) has already responded, using Next's
- * `after()` so the orchestrator run doesn't block the response.
- *
- * TODO: implement — call agents/orchestrator's runCampaign(campaignId)
- * inside after(), and make sure failures update the campaign's status
- * to 'failed' instead of disappearing silently.
+ * Kicks off a campaign run after the response has gone out, so the POST
+ * that created the campaign returns immediately. runCampaign never throws
+ * and records its own failures, so nothing here is left dangling.
  */
 export function startCampaignRun(campaignId: string): void {
-  after(() => {
-    void campaignId;
-    throw new Error("startCampaignRun() is not implemented yet");
+  after(async () => {
+    await runCampaign(campaignId);
   });
 }

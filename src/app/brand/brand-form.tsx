@@ -5,23 +5,16 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { buildBrandCard, estimateTokens } from "@/shared/brand-card";
 import type { BrandProfile, BrandProfileInput } from "@/shared/types";
+import { EXAMPLE_POST_COUNT } from "@/shared/schemas";
 import { saveBrandProfile, type BrandFormState } from "./actions";
 import { ColorField } from "./color-field";
 import { Field, inputClass, textareaClass } from "./field";
+import { LIST_FIELDS } from "./fields";
 import { ListEditor } from "./list-editor";
 import { LoadDemoButton } from "./load-demo-button";
 import { formatRelativeTime } from "./relative-time";
 import { ToneWordsInput } from "./tone-words-input";
 
-const EXAMPLE_POST_COUNT = 5;
-const LIST_FIELDS = [
-  "products",
-  "competitors",
-  "tone_words",
-  "dos",
-  "donts",
-  "example_posts",
-] as const;
 
 function emptyValues(): BrandProfileInput {
   return {

@@ -6,15 +6,18 @@ import { z } from "zod";
 import type {
   BrandProfileInputSchema,
   BrandProfileSchema,
+  CampaignBriefSchema,
   CampaignStatusSchema,
+  CritiqueLLMSchema,
+  CritiqueLLMSetSchema,
   CritiqueSchema,
   CritiqueScoresSchema,
-  CritiqueSetSchema,
   DraftSchema,
   DraftSetSchema,
   DraftStatusSchema,
   PlanSchema,
   PlatformIdSchema,
+  PlatformNotesSchema,
   StrategySchema,
 } from "./schemas";
 
@@ -25,12 +28,15 @@ export type DraftStatus = z.infer<typeof DraftStatusSchema>;
 export type BrandProfile = z.infer<typeof BrandProfileSchema>;
 export type BrandProfileInput = z.infer<typeof BrandProfileInputSchema>;
 
+export type CampaignBrief = z.infer<typeof CampaignBriefSchema>;
 export type Plan = z.infer<typeof PlanSchema>;
+export type PlatformNotes = z.infer<typeof PlatformNotesSchema>;
 export type Strategy = z.infer<typeof StrategySchema>;
 
 export type Draft = z.infer<typeof DraftSchema>;
 export type DraftSet = z.infer<typeof DraftSetSchema>;
 
 export type CritiqueScores = z.infer<typeof CritiqueScoresSchema>;
+export type CritiqueLLM = z.infer<typeof CritiqueLLMSchema>;
+export type CritiqueLLMSet = z.infer<typeof CritiqueLLMSetSchema>;
 export type Critique = z.infer<typeof CritiqueSchema>;
-export type CritiqueSet = z.infer<typeof CritiqueSetSchema>;

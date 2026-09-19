@@ -113,5 +113,6 @@ export const runSteps = pgTable("run_steps", {
   step: text("step").notNull(),
   model: text("model").notNull(),
   output: jsonb("output").notNull().$type<unknown>(),
+  duration_ms: integer("duration_ms").notNull().default(0),
   created_at: createdAt(),
 });

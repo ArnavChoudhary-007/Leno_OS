@@ -1,14 +1,7 @@
 /**
- * Validates process.env with zod at startup so a missing/malformed key
- * fails fast with a readable message instead of surfacing as a confusing
- * runtime error deep inside an agent or db call.
- *
- * Most keys are optional at this groundwork stage because no agent, LLM
- * call, or publish path is implemented yet. As each part comes online,
- * tighten its key here from `.optional()` to required.
- *
- * Set SKIP_ENV_VALIDATION=1 to bypass validation entirely — used by the
- * Docker build stage, which compiles the app before any secret is present.
+ * Fails fast on bad config instead of surfacing deep inside an agent or db
+ * call. SKIP_ENV_VALIDATION=1 bypasses it for the Docker build, which
+ * compiles before any secret exists.
  */
 import { z } from "zod";
 

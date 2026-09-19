@@ -73,13 +73,13 @@ only for a draft with `status = 'approved'`.
 ## Folder map
 
 - `src/app/` — pages (`/`, `/brand`, `/campaigns/new`, `/campaigns/[id]`) and
-  API route handlers (`/api/campaigns`, `/api/og`)
-- `src/agents/orchestrator/` — the loop described above
-- `src/agents/brand/`, `src/agents/research/`, `src/agents/strategy/` —
-  intelligence agents that feed the orchestrator's plan
+  API route handlers (`/api/campaigns`, `/api/campaigns/[id]`, `/api/health`)
+- `src/agents/orchestrator/` — the loop described above, plus `plan.ts`
+- `src/agents/strategy/` — angle, hooks and CTA for a planned campaign
 - `src/agents/critic/` — rubric constants and the critique function
-- `src/agents/platforms/` — one typed playbook per platform, a registry, and
-  `validateDraft()`
+- `src/agents/platforms/` — one typed playbook per platform, a registry,
+  `validateDraft()`, and `draft.ts` (writes and revises every platform)
+- Brand/audience and research agents are described above but not built yet
 - `src/creative/templates/` — branded image templates (later)
 - `src/tools/llm.ts` — writer/critic model registry, read from env
 - `src/tools/social/bluesky.ts` — the only code allowed to publish

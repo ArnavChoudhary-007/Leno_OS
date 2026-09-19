@@ -4,21 +4,13 @@ import { revalidatePath } from "next/cache";
 import { BrandProfileInputSchema } from "@/shared/schemas";
 import { demoBrand } from "@/db/demo-brand";
 import { upsertBrandProfile } from "@/db/queries/brand";
+import { LIST_FIELDS } from "./fields";
 
 export type BrandFormState = {
   ok: boolean;
   errors: Record<string, string[]>;
   message?: string;
 };
-
-const LIST_FIELDS = [
-  "products",
-  "competitors",
-  "tone_words",
-  "dos",
-  "donts",
-  "example_posts",
-] as const;
 
 function parseListField(formData: FormData, field: string): unknown {
   const raw = formData.get(field);

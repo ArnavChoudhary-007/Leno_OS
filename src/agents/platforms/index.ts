@@ -1,4 +1,4 @@
-import type { PlatformId } from "@/shared/types";
+import type { Draft, PlatformId } from "@/shared/types";
 import { xPlaybook } from "./x";
 import { linkedinPlaybook } from "./linkedin";
 import { instagramPlaybook } from "./instagram";
@@ -27,9 +27,25 @@ export interface DraftValidationResult {
   errors: string[];
 }
 
+function normalizeTag(tag: string): string {
+  const bare = tag.trim().replace(/^#+/, "");
+  return bare ? `#${bare}` : "";
+}
+
+/**
+ * The exact text that would be posted: body plus hashtags. This is what
+ * gets stored on the draft row and what the character gate measures.
+ */
+export function composePost(draft: Draft): string {
+  const tags = draft.hashtags.map(normalizeTag).filter(Boolean);
+  if (tags.length === 0) return draft.body.trim();
+  return `${draft.body.trim()}\n\n${tags.join(" ")}`;
+}
+
 /**
  * Hard gate on platform limits: character count and hashtag count.
- * This runs in plain code, before a draft ever reaches the critic agent.
+ * This runs in plain code, before the critic's opinion counts for
+ * anything — the model doesn't get to argue a post under the limit.
  */
 export function validateDraft(
   platformId: PlatformId,
@@ -44,14 +60,16 @@ export function validateDraft(
   }
   if (text.length > playbook.maxChars) {
     errors.push(
-      `Body is ${text.length} chars, exceeds ${playbook.displayName} limit of ${playbook.maxChars}.`,
+      `${text.length}/${playbook.maxChars} characters — shorten by ${text.length - playbook.maxChars}`,
     );
   }
   if (hashtags.length > playbook.maxHashtags) {
     errors.push(
-      `${hashtags.length} hashtags/tags exceeds ${playbook.displayName} limit of ${playbook.maxHashtags}.`,
+      `${hashtags.length}/${playbook.maxHashtags} hashtags — remove ${hashtags.length - playbook.maxHashtags}`,
     );
   }
+  // Note: instagram's requiresImage can't be gated here — drafts have no
+  // image yet. Add that check when image production lands.
 
   return { valid: errors.length === 0, errors };
 }

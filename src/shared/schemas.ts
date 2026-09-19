@@ -37,6 +37,9 @@ export const DraftStatusSchema = z.enum([
 // Company context
 // ---------------------------------------------------------------------------
 
+/** How many example posts a brand profile carries. The form renders this many. */
+export const EXAMPLE_POST_COUNT = 5;
+
 export const BrandProfileSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -48,7 +51,7 @@ export const BrandProfileSchema = z.object({
   tone_words: z.array(z.string()),
   dos: z.array(z.string()),
   donts: z.array(z.string()),
-  example_posts: z.array(z.string()).length(5),
+  example_posts: z.array(z.string()).length(EXAMPLE_POST_COUNT),
   primary_color: z.string(),
   secondary_color: z.string(),
   updated_at: z.string(),
@@ -85,7 +88,7 @@ export const BrandProfileInputSchema = z.object({
     .max(10, "10 items max"),
   example_posts: z
     .array(z.string().trim().min(20, "At least 20 characters"))
-    .length(5, "Exactly 5 example posts"),
+    .length(EXAMPLE_POST_COUNT, `Exactly ${EXAMPLE_POST_COUNT} example posts`),
   primary_color: z
     .string()
     .regex(HEX_COLOR_REGEX, "Must be a hex color like #1A2B3C"),
@@ -98,17 +101,41 @@ export const BrandProfileInputSchema = z.object({
 // Orchestrator: plan + strategy
 // ---------------------------------------------------------------------------
 
+/** The brief a human submits to start a campaign. */
+export const CampaignBriefSchema = z.object({
+  brief: z
+    .string()
+    .trim()
+    .min(20, "Brief must be at least 20 characters")
+    .max(2000, "Brief must be at most 2000 characters"),
+});
+
 export const PlanSchema = z.object({
   goal: z.string(),
   audience: z.string(),
   key_message: z.string(),
-  platforms: z.array(PlatformIdSchema),
+  /** Only platforms whose playbook is enabled; enforced in agents/orchestrator/plan.ts. */
+  platforms: z.array(PlatformIdSchema).min(1),
+});
+
+/**
+ * Per-platform angle notes. Spelled out key by key rather than as a
+ * z.record so the JSON Schema handed to Gemini stays a plain object with
+ * named properties — structured output is far more reliable that way.
+ */
+export const PlatformNotesSchema = z.object({
+  x: z.string().optional(),
+  linkedin: z.string().optional(),
+  instagram: z.string().optional(),
+  threads: z.string().optional(),
+  facebook: z.string().optional(),
 });
 
 export const StrategySchema = z.object({
   angle: z.string(),
-  hooks: z.array(z.string()),
+  hooks: z.array(z.string()).length(3),
   cta: z.string(),
+  platform_notes: PlatformNotesSchema,
 });
 
 // ---------------------------------------------------------------------------
@@ -136,14 +163,28 @@ export const CritiqueScoresSchema = z.object({
   craft: z.number().min(0).max(1),
 });
 
-export const CritiqueSchema = z.object({
+/**
+ * What the critic model is allowed to return. It scores and criticises —
+ * it never does the arithmetic and never decides pass/fail.
+ */
+export const CritiqueLLMSchema = z.object({
   platform: PlatformIdSchema,
   scores: CritiqueScoresSchema,
-  weighted: z.number().min(0).max(1),
-  pass: z.boolean(),
-  fix_list: z.array(z.string()),
+  fix_list: z
+    .array(z.string())
+    .max(5, "At most 5 fixes")
+    .describe("Specific, actionable fixes. Quote the exact phrase at fault."),
+  rationale: z.string(),
 });
 
-export const CritiqueSetSchema = z.object({
-  critiques: z.array(CritiqueSchema),
+export const CritiqueLLMSetSchema = z.object({
+  critiques: z.array(CritiqueLLMSchema),
 });
+
+/** The critique after code adds the hard gates, weighted score and verdict. */
+export const CritiqueSchema = CritiqueLLMSchema.extend({
+  weighted: z.number().min(0).max(1),
+  gate_failures: z.array(z.string()),
+  pass: z.boolean(),
+});
+

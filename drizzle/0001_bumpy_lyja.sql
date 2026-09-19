@@ -1,0 +1,1 @@
+ALTER TABLE "run_steps" ADD COLUMN "duration_ms" integer DEFAULT 0 NOT NULL;
