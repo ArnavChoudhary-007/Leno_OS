@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { requireAuthContext, requireCan } from "@/auth/server";
+import { isPublicDemo } from "@/auth/public-demo";
 import { catchRouteError, requestIdFrom } from "@/lib/http";
 import { AppError } from "@/shared/errors";
 import { env } from "@/env";
@@ -19,6 +20,12 @@ export async function GET(request: Request) {
   try {
     const ctx = await requireAuthContext();
     requireCan(ctx, "mutate");
+    if (isPublicDemo()) {
+      throw new AppError(
+        "forbidden",
+        "Connecting accounts is turned off in this public demo.",
+      );
+    }
 
     if (!linkedinConfigured()) {
       throw new AppError(

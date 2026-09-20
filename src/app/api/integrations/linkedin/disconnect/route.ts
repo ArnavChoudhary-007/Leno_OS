@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAuthContext, requireCan } from "@/auth/server";
+import { isPublicDemo } from "@/auth/public-demo";
 import {
   assertSameOrigin,
   catchRouteError,
@@ -17,6 +18,12 @@ export async function POST(request: Request) {
     assertSameOrigin(request);
     const ctx = await requireAuthContext();
     requireCan(ctx, "mutate");
+    if (isPublicDemo()) {
+      throw new AppError(
+        "forbidden",
+        "Connecting accounts is turned off in this public demo.",
+      );
+    }
     await disconnectLinkedIn(ctx.workspaceId);
     return NextResponse.json({ ok: true });
   } catch (err) {

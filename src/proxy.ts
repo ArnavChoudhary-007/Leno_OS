@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { ERROR_MESSAGES } from "@/shared/errors";
+import { isPublicDemo } from "@/auth/public-demo";
 
 const PUBLIC_PATHS = new Set([
   "/sign-in",
@@ -16,6 +17,15 @@ function isPublic(pathname: string): boolean {
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // Public demo: nobody signs in. Send the sign-in and invite pages home.
+  if (isPublicDemo()) {
+    if (pathname === "/sign-in" || pathname.startsWith("/invite/")) {
+      return NextResponse.redirect(new URL("/", request.url));
+    }
+    return NextResponse.next({ request });
+  }
+
   let response = NextResponse.next({ request });
 
   const url = process.env.SUPABASE_URL;

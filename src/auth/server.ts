@@ -2,10 +2,21 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { env } from "@/env";
-import { getMembershipByUserId } from "@/db/queries/workspaces";
+import {
+  getMembershipByUserId,
+  getWorkspaceBySlug,
+  LOCAL_WORKSPACE_SLUG,
+} from "@/db/queries/workspaces";
 import { AppError } from "@/shared/errors";
 import { can, type AuthzAction } from "@/authz/can";
 import type { AuthContext } from "@/authz/context";
+import { isPublicDemo, PUBLIC_DEMO_USER_ID } from "@/auth/public-demo";
+
+/** Actions strangers must never trigger in public demo mode. */
+const PUBLIC_DEMO_BLOCKED: ReadonlySet<AuthzAction> = new Set([
+  "publish",
+  "invite",
+]);
 
 export async function createSupabaseServer() {
   const cookieStore = await cookies();
@@ -32,6 +43,8 @@ export async function getSessionUser(): Promise<{
   id: string;
   email: string | null;
 } | null> {
+  if (isPublicDemo()) return { id: PUBLIC_DEMO_USER_ID, email: null };
+
   const supabase = await createSupabaseServer();
   const { data, error } = await supabase.auth.getUser();
   if (error || !data.user) return null;
@@ -39,6 +52,17 @@ export async function getSessionUser(): Promise<{
 }
 
 export async function requireAuthContext(): Promise<AuthContext> {
+  if (isPublicDemo()) {
+    const workspace = await getWorkspaceBySlug(LOCAL_WORKSPACE_SLUG);
+    if (!workspace) throw new AppError("no_workspace");
+    return {
+      userId: PUBLIC_DEMO_USER_ID,
+      email: null,
+      workspaceId: workspace.id,
+      role: "editor",
+    };
+  }
+
   const user = await getSessionUser();
   if (!user) throw new AppError("unauthorized");
 
@@ -54,6 +78,12 @@ export async function requireAuthContext(): Promise<AuthContext> {
 }
 
 export function requireCan(ctx: AuthContext, action: AuthzAction): void {
+  if (isPublicDemo() && PUBLIC_DEMO_BLOCKED.has(action)) {
+    throw new AppError(
+      "forbidden",
+      "Publishing is turned off in this public demo.",
+    );
+  }
   if (!can(ctx.role, action)) throw new AppError("forbidden");
 }
 

@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createHash } from "node:crypto";
 import { createSupabaseServer, getSessionUser } from "@/auth/server";
+import { isPublicDemo } from "@/auth/public-demo";
 import {
   addWorkspaceMember,
   getInviteByTokenHash,
@@ -63,6 +64,7 @@ export async function signIn(
 }
 
 export async function signOut(): Promise<void> {
+  if (isPublicDemo()) redirect("/");
   const supabase = await createSupabaseServer();
   await supabase.auth.signOut();
   redirect("/sign-in");

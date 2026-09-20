@@ -2,6 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { requireAuthContext, requireCan } from "@/auth/server";
+import { isPublicDemo } from "@/auth/public-demo";
 import { AppError } from "@/shared/errors";
 import { completeLinkedInOAuth } from "@/tools/social/linkedin";
 
@@ -23,6 +24,12 @@ export async function GET(request: Request) {
   try {
     const ctx = await requireAuthContext();
     requireCan(ctx, "mutate");
+    if (isPublicDemo()) {
+      throw new AppError(
+        "forbidden",
+        "Connecting accounts is turned off in this public demo.",
+      );
+    }
 
     const oauthError = url.searchParams.get("error");
     if (oauthError) {
