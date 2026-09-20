@@ -1,28 +1,9 @@
-<<<<<<< HEAD
-import { asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { runSteps } from "@/db/schema";
-import type { RunStepName } from "@/shared/types";
+import type { RunPhase, RunStepName } from "@/shared/types";
 
 export type { RunStepName };
-=======
-import { asc, desc, eq, and } from "drizzle-orm";
-import { db } from "@/db/client";
-import { runSteps } from "@/db/schema";
-import type { RunPhase } from "@/shared/types";
-
-/** What ran inside a phase. */
-export type RunStepName =
-  | "load_context"
-  | "plan"
-  | "strategy"
-  | "roster"
-  | "draft"
-  | "critique"
-  | "revise"
-  | "summary"
-  | "error";
->>>>>>> origin/main
 
 export type RunStep = typeof runSteps.$inferSelect;
 
@@ -67,7 +48,6 @@ export async function getRunSteps(campaignId: string): Promise<RunStep[]> {
     .orderBy(asc(runSteps.created_at));
 }
 
-<<<<<<< HEAD
 export async function latestWorkspaceRunStep(
   workspaceId: string,
 ): Promise<RunStep | null> {
@@ -88,7 +68,8 @@ export async function listWorkspaceRunSteps(
     .from(runSteps)
     .where(eq(runSteps.workspace_id, workspaceId))
     .orderBy(asc(runSteps.created_at));
-=======
+}
+
 /** When the campaign last showed signs of life — used to spot dead runs. */
 export async function getLastStepAt(
   campaignId: string,
@@ -126,5 +107,4 @@ export async function getModelsUsed(campaignId: string): Promise<string[]> {
     .where(eq(runSteps.campaign_id, campaignId));
 
   return [...new Set(rows.map((r) => r.model).filter((m): m is string => !!m))];
->>>>>>> origin/main
 }

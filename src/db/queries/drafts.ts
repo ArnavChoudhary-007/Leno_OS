@@ -1,18 +1,7 @@
-<<<<<<< HEAD
-import { and, desc, eq, isNotNull } from "drizzle-orm";
+import { and, desc, eq, isNotNull, ne } from "drizzle-orm";
 import { db } from "@/db/client";
 import { campaigns, drafts } from "@/db/schema";
-import type {
-  Critique,
-  DraftStatus,
-  PlatformId,
-} from "@/shared/types";
-=======
-import { and, desc, eq, inArray, ne } from "drizzle-orm";
-import { db } from "@/db/client";
-import { drafts } from "@/db/schema";
 import type { Critique, DraftStatus, PlatformId } from "@/shared/types";
->>>>>>> origin/main
 
 export type DraftRow = typeof drafts.$inferSelect;
 
@@ -22,12 +11,9 @@ export type NewDraft = {
   platform: PlatformId;
   version: number;
   body: string;
-<<<<<<< HEAD
   hashtags: string[];
   image_url?: string | null;
-=======
   review_note?: string | null;
->>>>>>> origin/main
 };
 
 export async function insertDrafts(rows: NewDraft[]): Promise<DraftRow[]> {
@@ -78,16 +64,6 @@ export async function updateDraftStatus(
   status: DraftStatus,
 ): Promise<void> {
   await db.update(drafts).set({ status }).where(eq(drafts.id, id));
-}
-
-<<<<<<< HEAD
-export async function getDraft(id: string): Promise<DraftRow | null> {
-  const [row] = await db
-    .select()
-    .from(drafts)
-    .where(eq(drafts.id, id))
-    .limit(1);
-  return row ?? null;
 }
 
 export async function getDraftInWorkspace(
@@ -213,7 +189,8 @@ export async function listScheduledDraftsInWorkspace(
     )
     .orderBy(drafts.scheduled_at)
     .limit(limit);
-=======
+}
+
 export async function saveReviewNote(
   id: string,
   note: string,
@@ -237,15 +214,6 @@ export async function supersedeOtherVersions(
         ne(drafts.id, keepDraftId),
       ),
     );
-}
-
-export async function supersedeDrafts(ids: string[]): Promise<void> {
-  if (ids.length === 0) return;
-  await db
-    .update(drafts)
-    .set({ status: "superseded" })
-    .where(inArray(drafts.id, ids));
->>>>>>> origin/main
 }
 
 export async function getDraftsForCampaign(
@@ -290,7 +258,6 @@ export async function getCurrentDraftsByPlatform(
     .orderBy(drafts.platform, desc(drafts.version));
 }
 
-<<<<<<< HEAD
 export type WorkspaceDraft = DraftRow & {
   campaign_brief: string;
   campaign_goal: string | null;
@@ -351,7 +318,8 @@ export async function listDraftActivity(
 
 export async function deleteDraft(id: string): Promise<void> {
   await db.delete(drafts).where(eq(drafts.id, id));
-=======
+}
+
 export async function getCurrentDraftForPlatform(
   campaignId: string,
   platform: PlatformId,
@@ -369,5 +337,4 @@ export async function getCurrentDraftForPlatform(
     .orderBy(desc(drafts.version))
     .limit(1);
   return row ?? null;
->>>>>>> origin/main
 }

@@ -3,13 +3,16 @@
 import type { RunStepName } from "@/shared/types";
 
 const STEP_LABEL: Record<RunStepName, string> = {
+  load_context: "Load context",
   plan: "Plan",
   strategy: "Strategy",
+  roster: "Select agents",
   research: "Research",
   draft: "Draft",
   image: "Image",
   critique: "Critique",
   revise: "Revise",
+  summary: "Summary",
   error: "Error",
 };
 

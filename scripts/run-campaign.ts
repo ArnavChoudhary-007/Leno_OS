@@ -2,20 +2,14 @@
  * Runs one campaign end to end, synchronously, and prints what happened.
  *
  *   npm run campaign:test
-<<<<<<< HEAD
- *   npm run campaign:test -- --threshold=0.95        # force revision rounds
- *   npm run campaign:test -- --image=./photo.jpg
- */
-import { readFile } from "node:fs/promises";
-import { runCampaign } from "@/agents/orchestrator";
-=======
  *   npm run campaign:test -- --threshold=0.95            # force revisions
  *   npm run campaign:test -- --brief="Launch the..."
+ *   npm run campaign:test -- --image=./photo.jpg
  *   npm run campaign:test -- --note-revise=linkedin      # then a human note
  */
+import { readFile } from "node:fs/promises";
 import { MAX_LLM_CALLS, runCampaign } from "@/agents/orchestrator";
 import { reviseWithNote } from "@/agents/orchestrator/revise-with-note";
->>>>>>> origin/main
 import { PLATFORM_PLAYBOOKS } from "@/agents/platforms";
 import { saveOriginalImage } from "@/creative/storage";
 import { client } from "@/db/client";
@@ -27,15 +21,11 @@ import {
   getDraftsForPlatform,
 } from "@/db/queries/drafts";
 import { getRunSteps } from "@/db/queries/runs";
-<<<<<<< HEAD
 import {
   getWorkspaceBySlug,
   LOCAL_WORKSPACE_SLUG,
 } from "@/db/queries/workspaces";
-import type { PlatformId } from "@/shared/types";
-=======
 import type { CampaignSummary, PlatformId } from "@/shared/types";
->>>>>>> origin/main
 
 const SAMPLE_BRIEF =
   "We are launching the Aero Case Pro, a charging case that adds 30 hours of battery to our earbuds. Launch week is next week. We want people who already own Aero earbuds to buy the case, and we want new buyers to see it as the reason to pick us. Keep it grounded — no spec-sheet bragging.";

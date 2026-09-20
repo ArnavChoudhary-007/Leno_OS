@@ -1,12 +1,9 @@
 import {
   claimCampaign,
-<<<<<<< HEAD
-  getCampaign,
-=======
   countLlmCall,
   finishCampaign,
+  getCampaign,
   saveBrandSnapshot,
->>>>>>> origin/main
   saveCampaignPlan,
   updateCampaignStatus,
 } from "@/db/queries/campaigns";
@@ -20,16 +17,12 @@ import {
 } from "@/db/queries/drafts";
 import { getModelsUsed, logStep, type RunStepName } from "@/db/queries/runs";
 import { buildBrandCard, getCompanyContext } from "@/memory/context";
-<<<<<<< HEAD
-import type { Critique, Draft, Plan, PlatformId, Strategy } from "@/shared/types";
 import { fitCampaignImages } from "@/creative/fit-campaign";
 import {
   formatResearchBlock,
   researchForLinkedIn,
   tavilyConfigured,
 } from "@/tools/tavily";
-import { critique, MAX_REVISION_ROUNDS, PASS_THRESHOLD } from "../critic";
-=======
 import type {
   CampaignSummary,
   Critique,
@@ -40,8 +33,7 @@ import type {
   Strategy,
 } from "@/shared/types";
 import { critique, MAX_REVISION_ROUNDS, PASS_THRESHOLD } from "../critic";
-import { composePost, PLATFORM_PLAYBOOKS } from "../platforms";
->>>>>>> origin/main
+import { PLATFORM_PLAYBOOKS } from "../platforms";
 import { draftAll, reviseDrafts } from "../platforms/draft";
 import { strategy as buildStrategy } from "../strategy";
 import { plan as buildPlan } from "./plan";
@@ -70,43 +62,20 @@ type Ctx = {
   calls: number;
 };
 
-/** Look up insert results by platform — never by array index. */
-function rowsByPlatform(rows: DraftRow[]): Map<PlatformId, DraftRow> {
-  const map = new Map<PlatformId, DraftRow>();
-  for (const row of rows) {
-    map.set(row.platform as PlatformId, row);
-  }
-  return map;
-}
-
-function critiquesByPlatform(critiques: Critique[]): Map<PlatformId, Critique> {
-  const map = new Map<PlatformId, Critique>();
-  for (const c of critiques) {
-    map.set(c.platform, c);
-  }
-  return map;
-}
-
 /**
  * The orchestrator's eight phases:
  *
-<<<<<<< HEAD
- *   plan -> strategy -> research (Tavily, LinkedIn only) -> draftAll
- *     -> image (GPT Image 1.5 if no upload)
- *     -> critique -> [revise -> critique] x3 -> done
- *
- * Four LLM calls minimum, ten maximum — never one call per platform.
- * Image generation is a separate OpenAI Images call, not an agent.
- * Tavily research is optional enrichment; a miss never fails the run.
- * Drafts that still fail after the last round are handed to a human.
-=======
  *   Understand -> Define goal -> Create plan -> Select agents
- *   -> Execute -> Evaluate -> Iterate -> Deliver
+ *   -> Execute (draftAll -> image if no upload) -> Evaluate
+ *   -> Iterate (research-informed revise -> critique) -> Deliver
  *
  * Four LLM calls minimum, MAX_LLM_CALLS maximum — never one per platform.
  * Every phase writes a run_steps row, including the code-only ones, so a
  * finished run can be read back start to finish.
->>>>>>> origin/main
+ * Image generation is a separate OpenAI Images call, not an agent.
+ * Tavily research (LinkedIn only) is optional enrichment; a miss never
+ * fails the run. Drafts that still fail after the last round are handed
+ * to a human.
  *
  * Hard rule: nothing here publishes. Publishing is deterministic code
  * (tools/social/*) run only after a human approves a draft.
@@ -122,38 +91,30 @@ export async function runCampaign(
   const threshold = opts?.threshold ?? PASS_THRESHOLD;
   const ctx: Ctx = { campaignId, startedAt: Date.now(), calls: 0 };
 
-  // Claiming is atomic: if this returns null another run already owns it.
-  const campaign = await claimCampaign(campaignId);
-  if (!campaign) return;
+  // Claims queued campaigns, or reclaims ones stuck in `running` past the
+  // stale window (process crash). Active runs and finished ones are no-ops.
+  const claimed = await claimCampaign(campaignId);
+  if (!claimed) return;
+
+  const campaign = await getCampaign(campaignId);
+  if (!campaign) {
+    throw new Error(`Campaign ${campaignId} not found`);
+  }
 
   const slots = new Map<PlatformId, Slot>();
   let plan: Plan | null = null;
   let strategy: Strategy | null = null;
 
   try {
-<<<<<<< HEAD
-    // Claims queued campaigns, or reclaims ones stuck in `running` past the
-    // stale window (process crash). Active runs and finished ones are no-ops.
-    const claimed = await claimCampaign(campaignId);
-    if (!claimed) return;
-
-    const campaign = await getCampaign(campaignId);
-    if (!campaign) {
-      throw new Error(`Campaign ${campaignId} not found`);
-    }
-
+    // ---- 1. Understand ---------------------------------------------------
     const brand = await getCompanyContext(campaign.workspace_id);
     const brandCard = buildBrandCard(brand);
-=======
-    // ---- 1. Understand -------------------------------------------------
-    const brandCard = buildBrandCard(await getCompanyContext());
     await saveBrandSnapshot(campaignId, brandCard);
     await code(ctx, "understand", "load_context", {
       brief_chars: campaign.brief.length,
-      brand: campaign.brief ? brandCardName(brandCard) : null,
+      brand: brandCardName(brandCard),
       brand_card_chars: brandCard.length,
     });
->>>>>>> origin/main
 
     // ---- 2. Define goal + Create plan ----------------------------------
     // One call, logged twice: the goal it settled on, then the whole plan.
@@ -169,7 +130,6 @@ export async function runCampaign(
     );
     strategy = strategised.object;
 
-<<<<<<< HEAD
     let researchBlock: string | undefined;
     if (plan.platforms.includes("linkedin") && tavilyConfigured()) {
       const started = Date.now();
@@ -186,6 +146,7 @@ export async function runCampaign(
         researchBlock = formatResearchBlock(research);
         await logStep(
           campaignId,
+          "execute",
           "research",
           "tavily",
           {
@@ -202,10 +163,6 @@ export async function runCampaign(
       }
     }
 
-    // 3. Draft every platform in one call
-    const drafted = await runStep(campaignId, "draft", () =>
-      draftAll(plan, strategy, brandCard, researchBlock),
-=======
     // ---- 3. Select agents ----------------------------------------------
     const roster: PlatformId[] = [];
     const skipped: string[] = [];
@@ -231,13 +188,11 @@ export async function runCampaign(
 
     // ---- 4. Execute ----------------------------------------------------
     const drafted = await llm(ctx, "execute", "draft", () =>
-      draftAll(activePlan, strategy!, brandCard),
->>>>>>> origin/main
+      draftAll(activePlan, strategy!, brandCard, researchBlock),
     );
     if (drafted.object.length === 0) {
       throw new Error("The writer returned no drafts");
     }
-<<<<<<< HEAD
 
     const fitted = await fitCampaignImages(
       campaign.workspace_id,
@@ -257,6 +212,7 @@ export async function runCampaign(
     if (fitted.generation) {
       await logStep(
         campaignId,
+        "execute",
         "image",
         fitted.generation.model,
         { size: fitted.generation.size },
@@ -265,8 +221,6 @@ export async function runCampaign(
       );
     }
 
-=======
->>>>>>> origin/main
     const rows = await insertDrafts(
       drafted.object.map((draft) => ({
         workspace_id: campaign.workspace_id,
@@ -280,78 +234,6 @@ export async function runCampaign(
     );
     const rowFor = byPlatform(rows);
 
-<<<<<<< HEAD
-    // 4. Critique every draft in one call
-    const critiqued = await runStep(campaignId, "critique", () =>
-      critique(drafted.object, plan, brandCard, threshold),
-    );
-
-    const rowMap = rowsByPlatform(rows);
-    const critiqueMap = critiquesByPlatform(critiqued.object);
-    const slots = new Map<string, Slot>();
-    for (const draft of drafted.object) {
-      const row = rowMap.get(draft.platform);
-      const verdict = critiqueMap.get(draft.platform);
-      if (!row) {
-        throw new Error(`No DB row returned for platform ${draft.platform}`);
-      }
-      if (!verdict) {
-        throw new Error(`No critique returned for platform ${draft.platform}`);
-      }
-      slots.set(draft.platform, {
-        draftId: row.id,
-        version: row.version,
-        draft,
-        critique: verdict,
-      });
-      await updateDraftCritique(row.id, verdict, "draft");
-    }
-
-    // 5. Revision rounds
-    for (let round = 1; round <= MAX_REVISION_ROUNDS; round++) {
-      const failing = [...slots.values()].filter((s) => !s.critique.pass);
-      if (failing.length === 0) break;
-
-      const revised = await runStep(campaignId, "revise", () =>
-        reviseDrafts(
-          failing.map((s) => ({ draft: s.draft, critique: s.critique })),
-          plan,
-          strategy,
-          brandCard,
-          researchBlock,
-        ),
-      );
-      if (revised.object.length === 0) break;
-
-      const newRows = await insertDrafts(
-        revised.object.map((draft) => ({
-          workspace_id: campaign.workspace_id,
-          campaign_id: campaignId,
-          platform: draft.platform,
-          version: (slots.get(draft.platform)?.version ?? 1) + 1,
-          body: draft.body,
-          hashtags: draft.hashtags,
-          image_url: imageUrls[draft.platform] ?? null,
-        })),
-      );
-
-      // Only the new versions get re-scored.
-      const rescored = await runStep(campaignId, "critique", () =>
-        critique(revised.object, plan, brandCard, threshold),
-      );
-
-      const newRowMap = rowsByPlatform(newRows);
-      const rescoreMap = critiquesByPlatform(rescored.object);
-      for (const draft of revised.object) {
-        const row = newRowMap.get(draft.platform);
-        const verdict = rescoreMap.get(draft.platform);
-        if (!row) {
-          throw new Error(`No DB row returned for revised ${draft.platform}`);
-        }
-        if (!verdict) {
-          throw new Error(`No critique returned for revised ${draft.platform}`);
-        }
-=======
     // ---- 5. Evaluate ---------------------------------------------------
     try {
       const critiqued = await llm(ctx, "evaluate", "critique", () =>
@@ -365,7 +247,6 @@ export async function runCampaign(
         const row = rowFor.get(draft.platform);
         const verdict = verdictFor.get(draft.platform);
         if (!row || !verdict) continue;
->>>>>>> origin/main
         slots.set(draft.platform, {
           draftId: row.id,
           version: row.version,
@@ -395,16 +276,20 @@ export async function runCampaign(
             activePlan,
             strategy!,
             brandCard,
+            researchBlock,
           ),
         );
         if (revised.object.length === 0) break;
 
         const newRows = await insertDrafts(
           revised.object.map((draft) => ({
+            workspace_id: campaign.workspace_id,
             campaign_id: campaignId,
             platform: draft.platform,
             version: (slots.get(draft.platform)?.version ?? 1) + 1,
-            body: composePost(draft),
+            body: draft.body,
+            hashtags: draft.hashtags,
+            image_url: imageUrls[draft.platform] ?? null,
           })),
         );
         const newRowFor = byPlatform(newRows);
