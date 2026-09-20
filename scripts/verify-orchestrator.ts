@@ -2,6 +2,8 @@ import { sql } from "drizzle-orm";
 import { client, db } from "@/db/client";
 import { brandProfile, campaigns, drafts, runSteps } from "@/db/schema";
 import { getCompanyContext } from "@/memory/context";
+import { buildBrandCard } from "@/shared/brand-card";
+import { getWorkspaceBySlug, LOCAL_WORKSPACE_SLUG } from "@/db/queries/workspaces";
 import { PLATFORM_PLAYBOOKS, getEnabledPlaybooks, validateDraft } from "@/agents/platforms";
 import { DraftSchema, PlanSchema, StrategySchema } from "@/shared/schemas";
 import { runCampaign } from "@/agents/orchestrator";
@@ -21,6 +23,14 @@ interface TestResult {
 }
 
 const results: TestResult[] = [];
+
+
+/** Every campaign/draft/brand row is workspace-scoped; tests use the seeded local workspace. */
+async function localWorkspaceId(): Promise<string> {
+  const ws = await getWorkspaceBySlug(LOCAL_WORKSPACE_SLUG);
+  if (!ws) throw new Error(`Workspace "${LOCAL_WORKSPACE_SLUG}" missing — run npm run db:migrate and db:seed first.`);
+  return ws.id;
+}
 
 async function main() {
   console.log("==================================================");
@@ -63,7 +73,7 @@ async function main() {
   // ---------------------------------------------------------------------------
   try {
     const queryResult = await db.execute(sql`select 1 as ping`);
-    const brand = await getCompanyContext();
+    const brand = await getCompanyContext(await localWorkspaceId());
     if (!brand || !brand.name) {
       throw new Error("No brand profile found in database");
     }
@@ -276,7 +286,7 @@ async function main() {
       body: "A well-designed workspace changes how clients perceive your brand and how teams collaborate.",
       hashtags: ["#WorkplaceDesign"],
     };
-    const testBrand = await getCompanyContext();
+    const testBrand = await getCompanyContext(await localWorkspaceId());
     const testPlan = {
       goal: "Generate awareness",
       audience: "Business owners",
@@ -284,7 +294,10 @@ async function main() {
       platforms: ["linkedin" as const],
     };
 
-    const critiqueResult = await critique(testDraft, testBrand, testPlan);
+    const critiqueResult = (
+      await critique([testDraft], testPlan, buildBrandCard(testBrand))
+    ).object[0];
+    if (!critiqueResult) throw new Error("Critic returned no result");
     results.push({
       id: 6,
       name: "CRITIC",
@@ -390,13 +403,17 @@ async function main() {
 
     // Try a simulated write to verify database constraints and persistence
     const testCampId = `test-verify-${Date.now()}`;
+    const workspaceId = await localWorkspaceId();
     await db.insert(campaigns).values({
       id: testCampId,
+      workspace_id: workspaceId,
+      created_by: "verify-orchestrator",
       brief: "Verification test campaign",
       status: "queued",
     });
 
     await db.insert(drafts).values({
+      workspace_id: workspaceId,
       campaign_id: testCampId,
       platform: "linkedin",
       version: 1,
@@ -405,6 +422,7 @@ async function main() {
     });
 
     await db.insert(runSteps).values({
+      workspace_id: workspaceId,
       campaign_id: testCampId,
       step: "draft_linkedin",
       model: "test-model",
