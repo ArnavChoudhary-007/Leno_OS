@@ -1,4 +1,5 @@
 import type { Draft, PlatformId } from "@/shared/types";
+import { instagramCaption } from "./instagram-rules";
 import { xPlaybook } from "./x";
 import { linkedinPlaybook } from "./linkedin";
 import { instagramPlaybook } from "./instagram";
@@ -8,6 +9,11 @@ import type { PlatformPlaybook } from "./types";
 
 export type { PlatformPlaybook } from "./types";
 export { applyLinkedInAgent } from "./linkedin-rules";
+export {
+  applyInstagramAgent,
+  instagramCaption,
+  splitInstagramBody,
+} from "./instagram-rules";
 
 /** Registry of every known platform playbook, including disabled ones. */
 export const PLATFORM_PLAYBOOKS: Record<PlatformId, PlatformPlaybook> = {
@@ -38,9 +44,17 @@ function normalizeTag(tag: string): string {
  * them separately; compose at validate/publish time.
  */
 export function composePost(draft: Draft): string {
+  // Instagram carousels and stories keep their structure in the body as
+  // "Slide N:" / "Story N:" lines. Those drive slide rendering and are not
+  // part of the caption, so they never reach a published post.
+  const body =
+    draft.platform === "instagram"
+      ? instagramCaption(draft.body)
+      : draft.body.trim();
+
   const tags = draft.hashtags.map(normalizeTag).filter(Boolean);
-  if (tags.length === 0) return draft.body.trim();
-  return `${draft.body.trim()}\n\n${tags.join(" ")}`;
+  if (tags.length === 0) return body;
+  return `${body}\n\n${tags.join(" ")}`;
 }
 
 /**

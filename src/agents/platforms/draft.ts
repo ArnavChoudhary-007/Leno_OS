@@ -3,6 +3,7 @@ import type { Critique, Draft, Plan, PlatformId, Strategy } from "@/shared/types
 import { generateStructured, type StructuredResult } from "@/tools/llm";
 import { playbookBlock, systemPrompt } from "../prompt";
 import { PLATFORM_PLAYBOOKS } from ".";
+import { applyInstagramAgent } from "./instagram-rules";
 import { applyLinkedInAgent } from "./linkedin-rules";
 
 const WRITER_ROLE =
@@ -63,7 +64,7 @@ export async function draftAll(
     ...result,
     object: dedupeByPlatform(result.object.drafts, plan.platforms).map(
       applyLinkedInAgent,
-    ),
+    ).map(applyInstagramAgent),
   };
 }
 
@@ -117,7 +118,7 @@ export async function reviseDrafts(
     ...result,
     object: dedupeByPlatform(result.object.drafts, platforms).map(
       applyLinkedInAgent,
-    ),
+    ).map(applyInstagramAgent),
   };
 }
 

@@ -186,12 +186,20 @@ export const CampaignBriefSchema = z.object({
     .max(2000, "Brief must be at most 2000 characters"),
 });
 
+/** Which Instagram artefact a campaign wants. Absent means a plain caption. */
+export const InstagramFormatSchema = z.enum(["caption", "carousel", "story"]);
+
 export const PlanSchema = z.object({
   goal: z.string(),
   audience: z.string(),
   key_message: z.string(),
   /** Only platforms whose playbook is enabled; enforced in agents/orchestrator/plan.ts. */
   platforms: z.array(PlatformIdSchema).min(1),
+  /**
+   * Optional so plans stored before this field existed still parse. The
+   * Instagram gates only demand slide markers when it says so.
+   */
+  instagram_format: InstagramFormatSchema.optional(),
 });
 
 /**

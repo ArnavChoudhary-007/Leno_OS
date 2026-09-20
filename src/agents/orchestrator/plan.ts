@@ -33,6 +33,12 @@ export async function plan(
       "goal: one sentence, measurable, what this campaign is for.",
       "audience: who specifically, grounded in the brand's audience.",
       "key_message: the single idea every post must land. One sentence.",
+      ...(enabled.includes("instagram")
+        ? [
+            "instagram_format: carousel for anything educational or list-shaped,",
+            "story for something quick and interactive, caption for a single image.",
+          ]
+        : []),
     ].join("\n"),
   });
 

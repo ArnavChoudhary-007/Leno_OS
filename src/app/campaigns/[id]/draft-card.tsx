@@ -243,6 +243,7 @@ export function DraftCard({
           </pre>
           <DraftCreative
             draftId={draft.id}
+            campaignId={draft.campaign_id}
             body={draft.body}
             platform={platform}
             imageUrl={draft.image_url}

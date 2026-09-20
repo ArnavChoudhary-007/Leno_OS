@@ -1,4 +1,5 @@
 import { getEnabledPlaybooks } from "./platforms";
+import { INSTAGRAM_WRITING_RULES } from "./platforms/instagram-rules";
 import { LINKEDIN_WRITING_RULES } from "./platforms/linkedin-rules";
 
 /**

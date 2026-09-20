@@ -2,6 +2,7 @@ import { CritiqueLLMSetSchema } from "@/shared/schemas";
 import type { Critique, CritiqueLLM, Draft, Plan } from "@/shared/types";
 import { generateStructured, type StructuredResult } from "@/tools/llm";
 import { composePost, validateDraft } from "../platforms";
+import { instagramGateFailures } from "../platforms/instagram-rules";
 import { linkedinGateFailures } from "../platforms/linkedin-rules";
 import { playbookBlock, systemPrompt } from "../prompt";
 
@@ -42,11 +43,14 @@ export function weightedScore(scores: CritiqueLLM["scores"]): number {
 }
 
 /** Platform limits and banned terms, all decided in code. */
-export function hardGates(draft: Draft): string[] {
+export function hardGates(draft: Draft, plan?: Plan): string[] {
   const post = composePost(draft);
   const failures = validateDraft(draft.platform, post, draft.hashtags).errors;
 
-  const lower = post.toLowerCase();
+  // Banned terms are checked against everything the writer produced, not
+  // just the published caption — a slur on slide 4 still ships as an image.
+  const lower = `${draft.body}
+${draft.hashtags.join(" ")}`.toLowerCase();
   for (const term of BANNED_TERMS) {
     if (lower.includes(term.toLowerCase())) {
       failures.push(`Remove the banned term "${term}"`);
@@ -54,6 +58,13 @@ export function hardGates(draft: Draft): string[] {
   }
   if (draft.platform === "linkedin") {
     failures.push(...linkedinGateFailures(post));
+  }
+  if (draft.platform === "instagram") {
+    // Takes the draft, not the composed post: the caption, the hashtag
+    // count and the slide structure are all judged separately.
+    failures.push(
+      ...instagramGateFailures(draft, { format: plan?.instagram_format }),
+    );
   }
   return failures;
 }
@@ -116,6 +127,14 @@ export async function critique(
             "Quote the offending phrase.",
           ].join(" ")
         : "",
+      platforms.includes("instagram")
+        ? [
+            "",
+            "For [instagram] also check the specialist rules: does the first line work as a hook on its own,",
+            "is the caption scannable, is there one clear CTA, and do carousel slides build to it.",
+            "Quote the offending phrase.",
+          ].join(" ")
+        : "",
       "",
       "fix_list: at most 5 specific fixes, each quoting the phrase at fault.",
       "Leave fix_list empty only when the post genuinely needs no changes.",
@@ -131,7 +150,7 @@ export async function critique(
 
   const critiques: Critique[] = drafts.map((draft) => {
     const llm = byPlatform.get(draft.platform)!;
-    const gate_failures = hardGates(draft);
+    const gate_failures = hardGates(draft, plan);
     const weighted = weightedScore(llm.scores);
 
     return {
