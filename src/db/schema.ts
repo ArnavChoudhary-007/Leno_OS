@@ -135,7 +135,9 @@ export const platformConnections = pgTable(
       t.platform,
     ),
   ],
-);
+  // Holds OAuth tokens. RLS on with no policies hides it from Supabase's
+  // PostgREST API; the server's direct Postgres role bypasses RLS.
+).enableRLS();
 
 // ---------------------------------------------------------------------------
 // brand_profile — one brand per workspace in v1
