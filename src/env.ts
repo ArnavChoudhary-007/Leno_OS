@@ -6,7 +6,10 @@
  * Do not import this module from a Client Component. Service-role and
  * DATABASE_URL must never ship to the browser.
  */
+import { loadEnvConfig } from "@next/env";
 import { z } from "zod";
+
+loadEnvConfig(process.cwd());
 
 function emptyToUndefined(value: unknown): unknown {
   return value === "" ? undefined : value;
