@@ -5,14 +5,12 @@ import {
   getCampaign,
   saveBrandSnapshot,
   saveCampaignPlan,
-  updateCampaignStatus,
 } from "@/db/queries/campaigns";
 import {
   getDraftsForCampaign,
   insertDrafts,
-  supersedeOtherVersions,
+  settleRunDrafts,
   updateDraftCritique,
-  updateDraftStatus,
   type DraftRow,
 } from "@/db/queries/drafts";
 import { getModelsUsed, logStep, type RunStepName } from "@/db/queries/runs";
@@ -37,6 +35,9 @@ import { PLATFORM_PLAYBOOKS } from "../platforms";
 import { draftAll, reviseDrafts } from "../platforms/draft";
 import { strategy as buildStrategy } from "../strategy";
 import { plan as buildPlan } from "./plan";
+import { CampaignOptionsSchema } from "@/shared/schemas";
+import { withModelContext } from "@/tools/run-context";
+import { toAppError } from "@/shared/errors";
 
 /** Hard ceilings. A run that hits either stops iterating and delivers. */
 export const MAX_LLM_CALLS = 10;
@@ -58,8 +59,10 @@ type Slot = {
 
 type Ctx = {
   campaignId: string;
+  runId: string;
   startedAt: number;
   calls: number;
+  logicalCalls: number;
 };
 
 /**
@@ -89,17 +92,25 @@ export async function runCampaign(
   opts?: { threshold?: number },
 ): Promise<void> {
   const threshold = opts?.threshold ?? PASS_THRESHOLD;
-  const ctx: Ctx = { campaignId, startedAt: Date.now(), calls: 0 };
+  const ctx: Ctx = { campaignId, runId: crypto.randomUUID(), startedAt: Date.now(), calls: 0, logicalCalls: 0 };
 
   // Claims queued campaigns, or reclaims ones stuck in `running` past the
   // stale window (process crash). Active runs and finished ones are no-ops.
-  const claimed = await claimCampaign(campaignId);
+  const claimed = await claimCampaign(campaignId, new Date(), ctx.runId);
   if (!claimed) return;
 
   const campaign = await getCampaign(campaignId);
   if (!campaign) {
     throw new Error(`Campaign ${campaignId} not found`);
   }
+
+  const options = CampaignOptionsSchema.parse(campaign.options ?? {});
+  return withModelContext({
+    options,
+    signal: AbortSignal.timeout(MAX_RUN_MS),
+    maxAttempts: MAX_LLM_CALLS,
+    onAttempt: async () => { ctx.calls += 1; await countLlmCall(campaignId, ctx.runId); },
+  }, async () => {
 
   const slots = new Map<PlatformId, Slot>();
   let plan: Plan | null = null;
@@ -109,7 +120,7 @@ export async function runCampaign(
     // ---- 1. Understand ---------------------------------------------------
     const brand = await getCompanyContext(campaign.workspace_id);
     const brandCard = buildBrandCard(brand);
-    await saveBrandSnapshot(campaignId, brandCard);
+    await saveBrandSnapshot(campaignId, brandCard, ctx.runId);
     await code(ctx, "understand", "load_context", {
       brief_chars: campaign.brief.length,
       brand: brandCardName(brandCard),
@@ -122,7 +133,7 @@ export async function runCampaign(
       buildPlan(campaign.brief, brandCard),
     );
     plan = planned.object;
-    await saveCampaignPlan(campaignId, plan);
+    await saveCampaignPlan(campaignId, plan, ctx.runId);
     await logStep(campaignId, "define_goal", "plan", planned.model, plan.goal, 0);
 
     const strategised = await llm(ctx, "plan", "strategy", () =>
@@ -131,7 +142,7 @@ export async function runCampaign(
     strategy = strategised.object;
 
     let researchBlock: string | undefined;
-    if (plan.platforms.includes("linkedin") && tavilyConfigured()) {
+    if (options.research && plan.platforms.includes("linkedin") && tavilyConfigured()) {
       const started = Date.now();
       const research = await researchForLinkedIn({
         workspaceId: campaign.workspace_id,
@@ -207,7 +218,10 @@ export async function runCampaign(
         secondaryColor: brand.secondary_color,
         toneWords: brand.tone_words,
       },
-    );
+    ).catch((err) => {
+      console.warn("[creative] Returning text drafts after image fitting failed:", err);
+      return { urls: {} } as Awaited<ReturnType<typeof fitCampaignImages>>;
+    });
     const imageUrls = fitted.urls;
     if (fitted.generation) {
       await logStep(
@@ -225,6 +239,7 @@ export async function runCampaign(
       drafted.object.map((draft) => ({
         workspace_id: campaign.workspace_id,
         campaign_id: campaignId,
+        run_id: ctx.runId,
         platform: draft.platform,
         version: 1,
         body: draft.body,
@@ -285,6 +300,7 @@ export async function runCampaign(
           revised.object.map((draft) => ({
             workspace_id: campaign.workspace_id,
             campaign_id: campaignId,
+            run_id: ctx.runId,
             platform: draft.platform,
             version: (slots.get(draft.platform)?.version ?? 1) + 1,
             body: draft.body,
@@ -324,19 +340,20 @@ export async function runCampaign(
     // ---- 7. Deliver ----------------------------------------------------
     await deliver(ctx, slots);
   } catch (err) {
-    const drafts = await getDraftsForCampaign(campaignId).catch(() => []);
+    const drafts = await getDraftsForCampaign(campaignId, ctx.runId).catch(() => []);
     await recordError(ctx, err);
 
     if (drafts.length > 0) {
       // Something usable exists — hand it over rather than binning the run.
       await deliver(ctx, slots).catch(async (deliverErr) => {
         await recordError(ctx, deliverErr);
-        await updateCampaignStatus(campaignId, "failed");
+        await finishCampaign(campaignId, "failed", null, ctx.runId);
       });
     } else {
-      await finishCampaign(campaignId, "failed", null);
+      await finishCampaign(campaignId, "failed", null, ctx.runId);
     }
   }
+  });
 }
 
 /**
@@ -345,7 +362,7 @@ export async function runCampaign(
  */
 async function deliver(ctx: Ctx, slots: Map<PlatformId, Slot>): Promise<void> {
   const { campaignId } = ctx;
-  const allDrafts = await getDraftsForCampaign(campaignId);
+  const allDrafts = await getDraftsForCampaign(campaignId, ctx.runId);
   const byPlatformRows = new Map<PlatformId, DraftRow[]>();
   for (const row of allDrafts) {
     const platform = row.platform as PlatformId;
@@ -368,34 +385,34 @@ async function deliver(ctx: Ctx, slots: Map<PlatformId, Slot>): Promise<void> {
     const status = passed ? "draft" : "needs_human";
     if (!passed) needsHuman = true;
 
-    await updateDraftStatus(kept.id, status);
-    await supersedeOtherVersions(campaignId, platform, kept.id);
-
     platforms.push({
       platform,
       draft_id: kept.id,
       version: kept.version,
       score: kept.score,
       pass: passed,
-      rounds_used: slot?.roundsUsed ?? Math.max(0, kept.version - 1),
+      rounds_used: slot?.roundsUsed ?? Math.max(0, versions.length - 1),
       status,
     });
   }
 
   platforms.sort((a, b) => a.platform.localeCompare(b.platform));
+  await settleRunDrafts(campaignId, ctx.runId, platforms.map((entry) => ({ id: entry.draft_id, status: entry.pass ? "draft" : "needs_human" })));
 
   const summary: CampaignSummary = {
     platforms,
     totals: {
       llm_calls: ctx.calls,
+      logical_calls: ctx.logicalCalls,
+      provider_attempts: ctx.calls,
       duration_ms: Date.now() - ctx.startedAt,
-      models_used: await getModelsUsed(campaignId),
+      models_used: await getModelsUsed(campaignId, new Date(ctx.startedAt).toISOString()),
     },
   };
 
   const status = platforms.length === 0 || needsHuman ? "needs_human" : "ready";
   await logStep(campaignId, "deliver", "summary", null, summary, 0);
-  await finishCampaign(campaignId, status, summary);
+  await finishCampaign(campaignId, status, summary, ctx.runId);
 }
 
 /** Highest score wins; an unscored version only wins if nothing else exists. */
@@ -429,8 +446,7 @@ async function llm<T>(
   step: RunStepName,
   call: () => Promise<{ object: T; model: string; ms: number }>,
 ): Promise<{ object: T; model: string; ms: number }> {
-  ctx.calls += 1;
-  await countLlmCall(ctx.campaignId);
+  ctx.logicalCalls += 1;
   const result = await call();
   await logStep(ctx.campaignId, phase, step, result.model, result.object, result.ms);
   return result;
@@ -450,7 +466,7 @@ async function recordError(ctx: Ctx, err: unknown): Promise<void> {
   const message = err instanceof Error ? err.message : String(err);
   console.error(`[orchestrator] campaign ${ctx.campaignId}:`, message);
   try {
-    await logStep(ctx.campaignId, "error", "error", null, { message }, 0);
+    await logStep(ctx.campaignId, "error", "error", null, { message: toAppError(err).message }, 0);
   } catch (logErr) {
     console.error("[orchestrator] could not record failure:", logErr);
   }

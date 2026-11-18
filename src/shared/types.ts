@@ -7,6 +7,8 @@ import type {
   BrandProfileInputSchema,
   BrandProfileSchema,
   CampaignBriefSchema,
+  CampaignOptionsSchema,
+  PublicationStatusSchema,
   CampaignStatusSchema,
   CampaignSummarySchema,
   CriticNotesSchema,
@@ -45,6 +47,8 @@ export type BrandProfile = z.infer<typeof BrandProfileSchema>;
 export type BrandProfileInput = z.infer<typeof BrandProfileInputSchema>;
 
 export type CampaignBrief = z.infer<typeof CampaignBriefSchema>;
+export type CampaignOptions = z.infer<typeof CampaignOptionsSchema>;
+export type PublicationStatus = z.infer<typeof PublicationStatusSchema>;
 export type CampaignSummary = z.infer<typeof CampaignSummarySchema>;
 export type Plan = z.infer<typeof PlanSchema>;
 export type PlatformNotes = z.infer<typeof PlatformNotesSchema>;

@@ -1,42 +1,25 @@
 import { NextResponse } from "next/server";
+import { authorizeMutation } from "@/auth/mutation";
 import { reviseWithNote } from "@/agents/orchestrator/revise-with-note";
+import { getDraftInWorkspace } from "@/db/queries/drafts";
+import { catchRouteError, requestIdFrom } from "@/lib/http";
+import { AppError } from "@/shared/errors";
 import { ReviewNoteSchema } from "@/shared/schemas";
 
-// Calls models and the DB — Node runtime, never edge.
 export const runtime = "nodejs";
 
-/** Rewrites one draft against a human's note and re-scores it. */
-export async function POST(
-  request: Request,
-  { params }: RouteContext<"/api/drafts/[id]/revise"> ,
-) {
-  const { id } = await params;
-
-  let body: unknown;
+export async function POST(request: Request, { params }: RouteContext<"/api/drafts/[id]/revise">) {
+  const requestId = requestIdFrom(request);
   try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: "Body must be JSON" }, { status: 400 });
-  }
-
-  const parsed = ReviewNoteSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: "Invalid note", issues: parsed.error.flatten().fieldErrors },
-      { status: 400 },
-    );
-  }
-
-  try {
+    const ctx = await authorizeMutation(request);
+    const { id } = await params;
+    const draft = await getDraftInWorkspace(ctx.workspaceId, id);
+    if (!draft) throw new AppError("not_found", "Draft not found");
+    const parsed = ReviewNoteSchema.safeParse(await request.json().catch(() => null));
+    if (!parsed.success) throw new AppError("invalid_body", "Add a revision note between 5 and 1000 characters.");
     const result = await reviseWithNote(id, parsed.data.note);
-    return NextResponse.json({
-      draft: result.after,
-      critique: result.critique,
-      superseded: result.before.id,
-    });
+    return NextResponse.json({ draft: result.after, critique: result.critique, superseded: result.before.id });
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    const missing = message.includes("not found");
-    return NextResponse.json({ error: message }, { status: missing ? 404 : 400 });
+    return catchRouteError(err, requestId);
   }
 }

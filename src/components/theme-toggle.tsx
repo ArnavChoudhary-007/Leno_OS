@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { Moon, Sun } from "lucide-react";
 
 function currentTheme(): "light" | "dark" {
@@ -16,14 +16,18 @@ function applyTheme(theme: "light" | "dark") {
   localStorage.setItem("leno-theme", theme);
 }
 
-export function ThemeToggle() {
-  const [theme, setTheme] = useState<"light" | "dark">("light");
+function subscribeTheme(onChange: () => void) {
+  const observer = new MutationObserver(onChange);
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  return () => observer.disconnect();
+}
 
-  useLayoutEffect(() => {
-    const next = currentTheme();
-    applyTheme(next);
-    setTheme(next);
-  }, []);
+function serverTheme(): "light" | "dark" {
+  return "light";
+}
+
+export function ThemeToggle() {
+  const theme = useSyncExternalStore(subscribeTheme, currentTheme, serverTheme);
 
   return (
     <button
@@ -33,7 +37,6 @@ export function ThemeToggle() {
       onClick={() => {
         const next = theme === "dark" ? "light" : "dark";
         applyTheme(next);
-        setTheme(next);
       }}
     >
       {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}

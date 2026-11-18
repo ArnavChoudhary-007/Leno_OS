@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { env } from "@/env";
+import { runSignal } from "./run-context";
 
 const TIMEOUT_MS = 120_000;
 
@@ -55,7 +56,7 @@ export async function generateOpenAIImage(prompt: string): Promise<GeneratedImag
       quality: "medium",
       output_format: "jpeg",
     }),
-    signal: AbortSignal.timeout(TIMEOUT_MS),
+    signal: runSignal(TIMEOUT_MS),
   });
 
   if (!res.ok) {
@@ -75,7 +76,7 @@ export async function generateOpenAIImage(prompt: string): Promise<GeneratedImag
   if (first.b64_json) {
     bytes = Buffer.from(first.b64_json, "base64");
   } else if (first.url) {
-    const img = await fetch(first.url, { signal: AbortSignal.timeout(30_000) });
+    const img = await fetch(first.url, { signal: runSignal(30_000) });
     if (!img.ok) {
       throw new Error(`Failed to download generated image (${img.status})`);
     }

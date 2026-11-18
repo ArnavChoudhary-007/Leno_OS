@@ -12,6 +12,7 @@ import {
 } from "@/tools/social/linkedin";
 import { tavilyConfigured } from "@/tools/tavily";
 import { LinkedInActions } from "./linkedin-actions";
+import { InviteForm } from "./invite-form";
 
 export const dynamic = "force-dynamic";
 
@@ -93,7 +94,7 @@ export default async function IntegrationsPage({
               </span>
             </div>
             <div className="integration-card-body">
-              AT Protocol publish path for X, Instagram, and Threads drafts.
+              AT Protocol publishing for X-format drafts to Bluesky. Instagram and Threads are export-only.
             </div>
             <div className="integration-meta-list">
               <div className="integration-meta-item">
@@ -101,14 +102,14 @@ export default async function IntegrationsPage({
                 <strong>AT Protocol / bsky.social</strong>
               </div>
               <div className="integration-meta-item">
-                <span>Last Sync</span>
+                <span>Readiness</span>
                 <strong>
                   {bluesky ? "Ready to publish approved drafts" : "Add BLUESKY_HANDLE"}
                 </strong>
               </div>
               <div className="integration-meta-item">
-                <span>OAuth Scopes</span>
-                <span>{bluesky ? 1 : 0} active</span>
+                <span>Authentication</span>
+                <span>App password</span>
               </div>
             </div>
           </article>
@@ -138,7 +139,7 @@ export default async function IntegrationsPage({
                 <strong>LinkedIn UGC / Share on LinkedIn</strong>
               </div>
               <div className="integration-meta-item">
-                <span>Last Sync</span>
+                <span>Readiness</span>
                 <strong>
                   {linkedinOn
                     ? "Ready to publish approved LinkedIn drafts"
@@ -146,8 +147,8 @@ export default async function IntegrationsPage({
                 </strong>
               </div>
               <div className="integration-meta-item">
-                <span>OAuth Scopes</span>
-                <span>{linkedinOn ? 4 : 0} active</span>
+                <span>Authentication</span>
+                <span>LinkedIn OAuth</span>
               </div>
             </div>
             <div className="integration-card-footer">
@@ -190,12 +191,12 @@ export default async function IntegrationsPage({
                 <strong>Tavily Search</strong>
               </div>
               <div className="integration-meta-item">
-                <span>Last Sync</span>
+                <span>Readiness</span>
                 <strong>{tavily ? "Used on LinkedIn campaign runs" : "Add TAVILY_API_KEY"}</strong>
               </div>
               <div className="integration-meta-item">
-                <span>OAuth Scopes</span>
-                <span>{tavily ? 1 : 0} active</span>
+                <span>Authentication</span>
+                <span>API key</span>
               </div>
             </div>
           </article>
@@ -232,9 +233,10 @@ export default async function IntegrationsPage({
           </article>
         </div>
         <p className="integration-footer-note" style={{ marginTop: 4 }}>
-          OpenAI images and the current writer key are already in the server environment.
+          Configure writer and image credentials in the server environment before generation.
           Redirect origin: {env.APP_URL}
         </p>
+        {can(ctx.role, "invite") ? <InviteForm /> : null}
       </div>
     </AppShell>
   );

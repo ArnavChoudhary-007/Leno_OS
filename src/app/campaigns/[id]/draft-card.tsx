@@ -7,8 +7,10 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { inputClass, textareaClass } from "@/app/brand/field";
 import { PLATFORM_PLAYBOOKS, composePost } from "@/agents/platforms";
 import { apiErrorMessage } from "@/lib/api-error";
-import type { CriticNotes, DraftStatus, PlatformId, PublishDestinations } from "@/shared/types";
+import type { CriticNotes, DraftReview, DraftStatus, PlatformId, PublishDestinations } from "@/shared/types";
 import { DraftCreative } from "./draft-creative";
+import { DraftRevisionNote } from "@/components/leno/draft-revision-note";
+import { canEditDraft, nativePublishDestination } from "@/lib/workspace-ui";
 
 export type DraftCardData = {
   id: string;
@@ -24,6 +26,7 @@ export type DraftCardData = {
   scheduled_at: string | null;
   published_url: string | null;
   image_url: string | null;
+  publish_error: string | null;
 };
 
 function statusLabel(status: DraftStatus): string {
@@ -38,6 +41,10 @@ function statusLabel(status: DraftStatus): string {
       return "Rejected";
     case "published":
       return "Published";
+    case "publishing":
+      return "Publishing";
+    case "publish_failed":
+      return "Publication needs reconciliation";
     case "superseded":
       return "Superseded";
   }
@@ -51,6 +58,7 @@ function statusVariant(
     case "published":
       return "success";
     case "rejected":
+    case "publish_failed":
       return "danger";
     case "needs_human":
       return "warning";
@@ -62,11 +70,15 @@ function statusVariant(
 export function DraftCard({
   draft,
   destinations,
+  canMutate = false,
+  isAdmin = false,
   onChanged,
 }: {
   draft: DraftCardData;
   destinations?: PublishDestinations;
-  onChanged: () => void;
+  canMutate?: boolean;
+  isAdmin?: boolean;
+  onChanged: () => void | Promise<void>;
 }) {
   const platform = draft.platform as PlatformId;
   const playbook = PLATFORM_PLAYBOOKS[platform];
@@ -87,6 +99,8 @@ export function DraftCard({
   const [scheduling, setScheduling] = useState(false);
   const [scheduleLocal, setScheduleLocal] = useState("");
   const [pending, startTransition] = useTransition();
+  const [reconciled, setReconciled] = useState(false);
+  const [publishedUrl, setPublishedUrl] = useState("");
 
   function parseHashtags(raw: string): string[] {
     return raw
@@ -126,29 +140,35 @@ export function DraftCard({
     }
   }
 
-  function review(payload: unknown) {
+  function review(payload: DraftReview) {
     startTransition(async () => {
-      const res = await fetch(
-        `/api/campaigns/${draft.campaign_id}/drafts/${draft.id}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        },
-      );
-      const data: unknown = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        const message = apiErrorMessage(data, `Request failed (${res.status})`);
-        toast.error(message);
-        return;
+      try {
+        const res = await fetch(
+          `/api/campaigns/${draft.campaign_id}/drafts/${draft.id}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          },
+        );
+        const data: unknown = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          const message = apiErrorMessage(data, `Request failed (${res.status})`);
+          toast.error(message);
+          return;
+        }
+        toast.success(actionToast(payload));
+        setEditing(false);
+        setRejecting(false);
+        setRejectNote("");
+        setScheduling(false);
+        setScheduleLocal("");
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Could not reach the server");
+      } finally {
+        try { await onChanged(); }
+        catch { toast.error("Could not refresh draft. Reload before another action."); }
       }
-      toast.success(actionToast(payload));
-      setEditing(false);
-      setRejecting(false);
-      setRejectNote("");
-      setScheduling(false);
-      setScheduleLocal("");
-      onChanged();
     });
   }
 
@@ -161,13 +181,13 @@ export function DraftCard({
     }
   }
 
-  const locked = draft.status === "published" || draft.status === "approved";
+  const locked = !canMutate || !canEditDraft(draft.status);
   const notes = draft.critic_notes;
-  const destination = platform === "linkedin" ? "LinkedIn" : "Bluesky";
+  const destination = nativePublishDestination(platform);
   const canPublish =
     platform === "linkedin"
       ? Boolean(destinations?.linkedin)
-      : Boolean(destinations?.bluesky);
+      : platform === "x" && Boolean(destinations?.bluesky);
 
   return (
     <article className="card">
@@ -193,7 +213,7 @@ export function DraftCard({
         </Button>
       </header>
 
-      {editing ? (
+      {!locked && editing ? (
         <div className="mt-3 flex flex-col gap-2">
           <textarea
             className={`${textareaClass} min-h-28`}
@@ -272,6 +292,22 @@ export function DraftCard({
         </div>
       ) : null}
 
+      {draft.publish_error ? <p role="alert" className="mt-2 text-sm text-destructive">Publication error: {draft.publish_error}</p> : null}
+      {draft.status === "publish_failed" ? (
+        <div className="mt-3 space-y-2">
+          <p role="alert">Publication outcome is uncertain. Do not retry until an admin checks the destination.</p>
+          {isAdmin ? <>
+            <label className="flex gap-2 text-sm"><input type="checkbox" checked={reconciled} onChange={(event) => setReconciled(event.target.checked)} />I checked the destination and confirmed the outcome.</label>
+            <input className={inputClass} type="url" value={publishedUrl} onChange={(event) => setPublishedUrl(event.target.value)} placeholder="Published post URL (optional)" aria-label="Published post URL" />
+            <div className="flex gap-2">
+              <Button size="sm" disabled={pending || !reconciled} onClick={() => review({ action: "resolve_publication", outcome: "published", ...(publishedUrl.trim() ? { published_url: publishedUrl.trim() } : {}) })}>Confirm published</Button>
+              <Button size="sm" variant="outline" disabled={pending || !reconciled} onClick={() => review({ action: "resolve_publication", outcome: "not_published" })}>Confirm not published</Button>
+            </div>
+          </> : null}
+        </div>
+      ) : null}
+      {!destination ? <p className="mt-2 text-sm text-muted-foreground">Export only: copy and image downloads are available. Native publishing and scheduling are not supported.</p> : null}
+
       {draft.review_note ? (
         <p className="mt-2 text-xs text-warning-foreground">
           Reject note: {draft.review_note}
@@ -297,7 +333,7 @@ export function DraftCard({
         </p>
       ) : null}
 
-      {rejecting ? (
+      {!locked && rejecting ? (
         <div className="mt-3 flex flex-col gap-2">
           <textarea
             className={`${textareaClass} min-h-20`}
@@ -329,7 +365,7 @@ export function DraftCard({
         </div>
       ) : null}
 
-      {scheduling ? (
+      {!locked && destination && scheduling ? (
         <div className="mt-3 flex flex-col gap-2">
           <input
             type="datetime-local"
@@ -344,11 +380,11 @@ export function DraftCard({
               disabled={pending || !scheduleLocal}
               onClick={() => {
                 const iso = localToIso(scheduleLocal);
-                if (!iso) {
-                  toast.error("Pick a valid date and time");
+                if (!iso || new Date(iso).getTime() <= Date.now()) {
+                  toast.error("Pick a future date and time");
                   return;
                 }
-                review({ action: "schedule", scheduled_at: iso });
+                review({ action: "schedule", scheduled_at: iso, body, hashtags: parseHashtags(hashtagsText) });
               }}
             >
               Save schedule
@@ -370,7 +406,7 @@ export function DraftCard({
           <Button
             size="sm"
             disabled={pending}
-            onClick={() => review({ action: "approve" })}
+            onClick={() => review({ action: "approve", body, hashtags: parseHashtags(hashtagsText) })}
           >
             Approve
           </Button>
@@ -393,7 +429,7 @@ export function DraftCard({
         </div>
       ) : null}
 
-      {draft.status === "approved" && !editing && !rejecting && !scheduling ? (
+      {canMutate && draft.status === "approved" && !editing && !rejecting && !scheduling ? (
         <div className="mt-3 flex flex-wrap gap-2">
           {canPublish ? (
             <Button
@@ -403,15 +439,16 @@ export function DraftCard({
             >
               Publish to {destination}
             </Button>
-          ) : (
+          ) : destination ? (
             <a href="/integrations" className={buttonVariants({ size: "sm", variant: "outline" })}>
               Connect {destination} to publish
             </a>
-          )}
+          ) : <Button size="sm" disabled title="This platform is export-only">Export only</Button>}
           <Button
             size="sm"
             variant="outline"
-            disabled={pending}
+            disabled={pending || !destination}
+            title={destination ? `Schedule on ${destination}` : "Export-only: scheduling is unavailable"}
             onClick={() => setScheduling(true)}
           >
             Schedule
@@ -428,6 +465,7 @@ export function DraftCard({
           ) : null}
         </div>
       ) : null}
+      {!locked && !pending && !editing && !rejecting && !scheduling && !draft.scheduled_at ? <DraftRevisionNote draftId={draft.id} onChanged={onChanged} /> : null}
     </article>
   );
 }

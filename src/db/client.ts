@@ -31,9 +31,20 @@ const globalForDb = globalThis as unknown as {
   __postgresClient?: ReturnType<typeof postgres>;
 };
 
+const isBuild =
+  process.env.SKIP_ENV_VALIDATION === "1" &&
+  process.env.NEXT_PHASE === "phase-production-build";
+const databaseUrl =
+  env.DATABASE_URL ||
+  (isBuild ? "postgresql://build:build@127.0.0.1:1/build" : undefined);
+
+if (!databaseUrl) {
+  throw new Error("DATABASE_URL is required at runtime");
+}
+
 const client =
   globalForDb.__postgresClient ??
-  postgres(env.DATABASE_URL, postgresOptions(env.DATABASE_URL));
+  postgres(databaseUrl, postgresOptions(databaseUrl));
 
 if (process.env.NODE_ENV === "development") {
   globalForDb.__postgresClient = client;

@@ -3,6 +3,7 @@ import type { Plan, PlatformId } from "@/shared/types";
 import { generateStructured, type StructuredResult } from "@/tools/llm";
 import { getEnabledPlaybooks } from "../platforms";
 import { systemPrompt } from "../prompt";
+import { getModelContext } from "@/tools/run-context";
 
 /**
  * Turns a free-text brief into a concrete goal, audience, key message and
@@ -13,7 +14,10 @@ export async function plan(
   brief: string,
   brandCard: string,
 ): Promise<StructuredResult<Plan>> {
-  const enabled = getEnabledPlaybooks().map((p) => p.id);
+  const options = getModelContext()?.options;
+  const requested = options?.platforms;
+  const enabled = getEnabledPlaybooks().map((p) => p.id).filter((platform) => !requested || requested.includes(platform));
+  if (!enabled.length) throw new Error("Select at least one enabled platform.");
 
   const result = await generateStructured({
     role: "writer",
@@ -26,6 +30,10 @@ export async function plan(
       "Turn this campaign brief into a plan.",
       "",
       `BRIEF: ${brief}`,
+      `INPUT MODE: ${options?.source ?? "idea"}.`,
+      options?.source === "source" || options?.source === "repurpose"
+        ? "Adapt the supplied source text, preserving its facts and meaning. URLs are references only; their contents have not been fetched."
+        : "Develop the supplied idea or campaign objective into a coordinated distribution plan.",
       "",
       `Choose platforms only from: ${enabled.join(", ")}.`,
       "Pick every platform where this campaign genuinely fits — usually all of them.",
@@ -44,7 +52,7 @@ export async function plan(
     ...result,
     object: {
       ...result.object,
-      platforms: platforms.length > 0 ? [...new Set(platforms)] : enabled,
+      platforms: requested ? enabled : platforms.length > 0 ? [...new Set(platforms)] : enabled,
     },
   };
 }

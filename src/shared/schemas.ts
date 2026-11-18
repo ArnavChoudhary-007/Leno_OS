@@ -29,6 +29,8 @@ export const DRAFT_STATUSES = [
   "draft",
   "needs_human",
   "approved",
+  "publishing",
+  "publish_failed",
   "rejected",
   "published",
   /** An older version of a platform's post, replaced by a newer one. */
@@ -93,6 +95,8 @@ export const CampaignSummarySchema = z.object({
   ),
   totals: z.object({
     llm_calls: z.number().int(),
+    logical_calls: z.number().int().optional(),
+    provider_attempts: z.number().int().optional(),
     duration_ms: z.number().int(),
     models_used: z.array(z.string()),
   }),
@@ -183,6 +187,27 @@ export const CampaignBriefSchema = z.object({
     .trim()
     .min(20, "Brief must be at least 20 characters")
     .max(2000, "Brief must be at most 2000 characters"),
+});
+
+export const CampaignOptionsSchema = z.object({
+  platforms: z.array(PlatformIdSchema).min(1).max(5).transform((values) => [...new Set(values)]).default(["linkedin", "instagram", "x"]),
+  creativity: z.number().min(0).max(1).default(0.7),
+  research: z.boolean().default(true),
+  researchDepth: z.enum(["standard", "deep"]).default("standard"),
+  length: z.enum(["short", "medium", "long"]).default("medium"),
+  brandVoice: z.boolean().default(true),
+  source: z.enum(["idea", "source", "campaign", "repurpose"]).default("idea"),
+});
+
+export const CampaignCreateSchema = CampaignBriefSchema.extend({
+  options: CampaignOptionsSchema.default(() => CampaignOptionsSchema.parse({})),
+});
+
+export const PublicationStatusSchema = z.enum(["claimed", "succeeded", "failed", "unknown"]);
+
+export const InviteCreateSchema = z.object({
+  email: z.string().trim().email(),
+  role: z.enum(["viewer", "editor", "admin"]),
 });
 
 export const PlanSchema = z.object({
@@ -287,7 +312,11 @@ export const CriticNotesSchema = z.object({
 
 /** Human review actions on one draft (Approve / Edit / Reject / Publish / Schedule). */
 export const DraftReviewSchema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("approve") }),
+  z.object({
+    action: z.literal("approve"),
+    body: z.string().trim().min(1).max(5000).optional(),
+    hashtags: z.array(z.string().trim().min(1)).max(30).optional(),
+  }),
   z.object({
     action: z.literal("reject"),
     review_note: z
@@ -305,9 +334,16 @@ export const DraftReviewSchema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("schedule"),
     scheduled_at: z.string().datetime({ offset: true }),
+    body: z.string().trim().min(1).max(5000).optional(),
+    hashtags: z.array(z.string().trim().min(1)).max(30).optional(),
   }),
   z.object({ action: z.literal("clear_schedule") }),
   z.object({ action: z.literal("delete") }),
+  z.object({
+    action: z.literal("resolve_publication"),
+    outcome: z.enum(["published", "not_published"]),
+    published_url: z.string().url().optional(),
+  }),
 ]);
 
 /** Which live channels this workspace can publish to. */
@@ -328,4 +364,3 @@ export const ResearchBriefSchema = z.object({
   answer: z.string(),
   sources: z.array(ResearchSourceSchema).max(5),
 });
-

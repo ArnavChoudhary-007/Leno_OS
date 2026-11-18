@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { Drawer } from "@/components/leno/drawer";
 import { PlatformPill } from "@/components/leno/platform-pill";
 import { reviewDraftOrThrow } from "@/lib/review-draft";
-import { draftStage, stageBadgeClass } from "@/lib/workspace-ui";
+import { canApproveDraft, draftStage, stageBadgeClass } from "@/lib/workspace-ui";
 import type { DraftStatus } from "@/shared/types";
 
 export type TrackMilestone = {
@@ -24,6 +24,7 @@ export type TrackDraft = {
   scheduled_at: string | null;
   campaign_goal: string | null;
   campaign_brief: string;
+  publish_error: string | null;
 };
 
 export function TrackDrawer({
@@ -54,6 +55,7 @@ export function TrackDrawer({
         await fn();
         toast.success(label);
         onChanged();
+        onClose();
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Action failed");
       }
@@ -155,7 +157,9 @@ export function TrackDrawer({
                 )}
               </div>
             </div>
-            {canMutate ? (
+            {draft.publish_error ? <p role="alert">Publication error: {draft.publish_error}</p> : null}
+            {draft.status === "publish_failed" ? <p>Publication outcome is uncertain. Open the campaign for admin reconciliation.</p> : null}
+            {canMutate && canApproveDraft(draft.status) ? (
               <div
                 style={{
                   display: "flex",
@@ -180,15 +184,9 @@ export function TrackDrawer({
                 >
                   Approve Post
                 </button>
-                <a
-                  href={`/campaigns/${draft.campaign_id}`}
-                  className="btn btn-secondary"
-                  style={{ flex: 1, textAlign: "center" }}
-                >
-                  Open campaign
-                </a>
               </div>
             ) : null}
+            <a href={`/campaigns/${draft.campaign_id}`} className="btn btn-secondary">Open campaign</a>
           </div>
         </>
       ) : null}

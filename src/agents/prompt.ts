@@ -1,18 +1,21 @@
 import { getEnabledPlaybooks } from "./platforms";
 import { LINKEDIN_WRITING_RULES } from "./platforms/linkedin-rules";
+import { getModelContext } from "@/tools/run-context";
 
 /**
  * Every agent gets the same company context in its system prompt, plus
  * the rule that matters most: it writes, it never publishes.
  */
 export function systemPrompt(role: string, brandCard: string): string {
+  const useVoice = getModelContext()?.options.brandVoice !== false;
+  const card = useVoice ? brandCard : brandCard.split("\n\n").filter((section) => !/^(Tone:|Example posts:)/.test(section)).join("\n\n");
   return [
     role,
     "",
-    "You are working for this brand. Everything you produce must sound like it.",
+    useVoice ? "You are working for this brand. Everything you produce must sound like it." : "Use a clear neutral voice. Preserve brand facts and constraints without imitating its example posts.",
     "",
     "=== BRAND CARD ===",
-    brandCard,
+    card,
     "=== END BRAND CARD ===",
     "",
     "You never publish anything and you never claim to have published anything.",

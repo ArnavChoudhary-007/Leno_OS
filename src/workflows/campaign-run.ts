@@ -8,6 +8,6 @@ import { runCampaign } from "@/agents/orchestrator";
  */
 export function startCampaignRun(campaignId: string): void {
   after(async () => {
-    await runCampaign(campaignId);
+    await runCampaign(campaignId).catch((err) => console.error("[campaign] Could not start run:", err));
   });
 }

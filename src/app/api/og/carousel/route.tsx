@@ -8,6 +8,13 @@ import { AppError } from "@/shared/errors";
 
 export const runtime = "nodejs";
 
+function carouselResponse(brand: Awaited<ReturnType<typeof loadBrandVisual>>, slides: string[], slide: number) {
+  return new ImageResponse(
+    <CarouselSlideMarkup brand={brand} text={slides[slide]} index={slide} total={slides.length} />,
+    { ...OG_SIZE },
+  );
+}
+
 /**
  * One branded carousel slide (1080×1080).
  *
@@ -44,17 +51,7 @@ export async function GET(request: Request) {
     }
 
     const brand = await loadBrandVisual(ctx.workspaceId);
-    return new ImageResponse(
-      (
-        <CarouselSlideMarkup
-          brand={brand}
-          text={slides[slide]}
-          index={slide}
-          total={slides.length}
-        />
-      ),
-      { ...OG_SIZE },
-    );
+    return carouselResponse(brand, slides, slide);
   } catch (err) {
     if (err instanceof AppError) {
       return jsonErrorCode(err.code, { requestId, message: err.message });

@@ -45,7 +45,11 @@ export async function publish(
     );
   }
 
-  const agent = new AtpAgent({ service: BLUESKY_SERVICE });
+  const deadline = AbortSignal.timeout(90_000);
+  const agent = new AtpAgent({ service: BLUESKY_SERVICE, fetch: (input, init) => {
+    const inherited = init?.signal ?? (input instanceof Request ? input.signal : undefined);
+    return fetch(input, { ...init, signal: inherited ? AbortSignal.any([deadline, inherited]) : deadline });
+  } });
   await agent.login({ identifier: handle, password });
 
   const richText = new RichText({ text: trimmed });

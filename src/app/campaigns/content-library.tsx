@@ -10,6 +10,8 @@ import type { FeedAuthor } from "@/components/leno/feed-preview";
 import { reviewDraftOrThrow } from "@/lib/review-draft";
 import {
   draftStage,
+  canApproveDraft,
+  canEditDraft,
   platformLabel,
   stageBadgeClass,
 } from "@/lib/workspace-ui";
@@ -27,12 +29,13 @@ export type LibraryPost = {
   scheduled_at: string | null;
   published_url: string | null;
   image_url: string | null;
+  publish_error: string | null;
   created_at: string;
   campaign_brief: string;
   campaign_goal: string | null;
 };
 
-const STATUS_TABS = ["All", "Review", "Scheduled", "Published", "Draft"] as const;
+const STATUS_TABS = ["All", "Review", "Scheduled", "Publishing", "Publication failed", "Published", "Draft"] as const;
 
 function matchesTab(post: LibraryPost, tab: (typeof STATUS_TABS)[number]): boolean {
   const stage = draftStage(post);
@@ -40,6 +43,7 @@ function matchesTab(post: LibraryPost, tab: (typeof STATUS_TABS)[number]): boole
   if (tab === "Review") return stage === "Review";
   if (tab === "Scheduled") return stage === "Scheduled";
   if (tab === "Published") return stage === "Published";
+  if (tab === "Publishing" || tab === "Publication failed") return stage === tab;
   return stage === "Generated" || stage === "Validated";
 }
 
@@ -109,9 +113,10 @@ export function ContentLibrary({
       try {
         for (const row of rows) await fn(row);
         toast.success(`${label} ${rows.length} posts`);
-        refresh();
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Bulk action failed");
+      } finally {
+        refresh();
       }
     });
   }
@@ -166,7 +171,7 @@ export function ContentLibrary({
             <button
               type="button"
               className="btn btn-sm btn-accent"
-              disabled={pending}
+              disabled={pending || filtered.some((post) => selected.has(post.id) && !canApproveDraft(post.status))}
               onClick={() =>
                 bulk(
                   (post) =>
@@ -180,7 +185,7 @@ export function ContentLibrary({
             <button
               type="button"
               className="btn btn-sm btn-destructive"
-              disabled={pending}
+              disabled={pending || filtered.some((post) => selected.has(post.id) && !canEditDraft(post.status))}
               onClick={() =>
                 bulk(
                   (post) =>
@@ -272,8 +277,9 @@ export function ContentLibrary({
                         className="btn btn-sm btn-subtle"
                         onClick={() => setEditing(post)}
                       >
-                        Edit
+                        {canMutate && canEditDraft(post.status) ? "Edit" : "View"}
                       </button>
+                      {post.status === "publish_failed" ? <Link href={`/campaigns/${post.campaign_id}`} className="btn btn-sm btn-subtle">Reconcile in campaign</Link> : null}
                     </td>
                   </tr>
                 );
@@ -284,7 +290,8 @@ export function ContentLibrary({
       )}
 
       <EditorDrawer
-        draft={editing}
+        key={editing?.id ?? "closed"}
+        draft={editing ? posts.find((post) => post.id === editing.id) ?? null : null}
         author={author}
         canMutate={canMutate}
         onClose={() => setEditing(null)}

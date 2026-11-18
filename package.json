@@ -8,8 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
-    "test": "SKIP_ENV_VALIDATION=1 tsx --test src/authz/can.test.ts src/shared/errors.test.ts src/lib/api-error.test.ts src/lib/http.test.ts src/agents/critic/scoring.test.ts src/agents/platforms/compose.test.ts src/agents/platforms/linkedin-rules.test.ts src/creative/slides.test.ts src/creative/fit-image.test.ts src/creative/image-prompt.test.ts src/tools/social/bluesky.test.ts src/tools/social/linkedin.test.ts src/tools/tavily.test.ts src/tools/llm.retry.test.ts",
-    "test:db": "node --import ./scripts/load-env.mjs --import tsx --test src/db/queries/scope.test.ts",
+    "test": "node scripts/test.mjs",
+    "test:images": "node --import tsx scripts/test-images.ts",
+    "test:db": "node --import ./scripts/load-env.mjs --import tsx --test src/db/queries/scope.test.ts src/db/queries/integrity.test.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "node --import ./scripts/load-env.mjs ./node_modules/drizzle-kit/bin.cjs migrate",
     "db:push": "node --import ./scripts/load-env.mjs ./node_modules/drizzle-kit/bin.cjs push",
@@ -19,6 +20,7 @@
     "campaign:test": "node --import ./scripts/load-env.mjs --import tsx scripts/run-campaign.ts",
     "bootstrap-owner": "node --import ./scripts/load-env.mjs --import tsx scripts/bootstrap-owner.ts",
     "bootstrap-demo-users": "node --import ./scripts/load-env.mjs --import tsx scripts/bootstrap-demo-users.ts",
+    "scheduler": "node --import ./scripts/load-env.mjs --import tsx scripts/scheduler.ts",
     "deploy": "bash ./scripts/deploy.sh"
   },
   "engines": {

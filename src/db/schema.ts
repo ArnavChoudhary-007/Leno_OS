@@ -16,6 +16,8 @@ import {
 } from "@/shared/schemas";
 import type {
   CampaignStatus,
+  CampaignOptions,
+  PublicationStatus,
   CampaignSummary,
   CriticNotes,
   CritiqueScores,
@@ -58,7 +60,7 @@ export const workspaces = pgTable("workspaces", {
   default_timezone: text("default_timezone").notNull().default("UTC"),
   created_at: createdAt(),
   updated_at: timestamptz("updated_at").notNull().defaultNow(),
-}, (t) => [uniqueIndex("workspaces_slug_uidx").on(t.slug)]);
+}, (t) => [uniqueIndex("workspaces_slug_uidx").on(t.slug)]).enableRLS();
 
 export const workspaceMembers = pgTable(
   "workspace_members",
@@ -80,7 +82,7 @@ export const workspaceMembers = pgTable(
     ),
     uniqueIndex("workspace_members_user_uidx").on(t.user_id),
   ],
-);
+).enableRLS();
 
 export const workspaceInvites = pgTable(
   "workspace_invites",
@@ -100,13 +102,13 @@ export const workspaceInvites = pgTable(
     created_at: createdAt(),
   },
   (t) => [uniqueIndex("workspace_invites_token_hash_uidx").on(t.token_hash)],
-);
+).enableRLS();
 
 export const rateLimitBuckets = pgTable("rate_limit_buckets", {
   key: text("key").primaryKey(),
   window_start: timestamptz("window_start").notNull(),
   count: integer("count").notNull(),
-});
+}).enableRLS();
 
 // ---------------------------------------------------------------------------
 // platform_connections — OAuth tokens per workspace (LinkedIn first)
@@ -167,7 +169,7 @@ export const brandProfile = pgTable(
     updated_at: timestamptz("updated_at").notNull().defaultNow(),
   },
   (t) => [uniqueIndex("brand_profile_workspace_uidx").on(t.workspace_id)],
-);
+).enableRLS();
 
 // ---------------------------------------------------------------------------
 // campaigns — one campaign brief driving one orchestrator run
@@ -185,6 +187,8 @@ export const campaigns = pgTable(
     }),
     created_by: text("created_by").notNull(),
     brief: text("brief").notNull(),
+    options: jsonb("options").$type<CampaignOptions>(),
+    run_id: text("run_id"),
     /** Denormalized plan.goal for display/filter; full plan is in `plan`. */
     goal: text("goal"),
     plan: jsonb("plan").$type<Plan | null>(),
@@ -205,7 +209,7 @@ export const campaigns = pgTable(
   (t) => [
     index("campaigns_workspace_created_idx").on(t.workspace_id, t.created_at),
   ],
-);
+).enableRLS();
 
 // ---------------------------------------------------------------------------
 // drafts — one row per platform per revision round
@@ -223,6 +227,7 @@ export const drafts = pgTable(
       .references(() => campaigns.id, { onDelete: "cascade" }),
     platform: text("platform").notNull(),
     version: integer("version").notNull().default(1),
+    run_id: text("run_id"),
     /** Post text without hashtags. Publish path composes with `hashtags`. */
     body: text("body").notNull(),
     hashtags: jsonb("hashtags").notNull().$type<string[]>().default([]),
@@ -238,6 +243,11 @@ export const drafts = pgTable(
     review_note: text("review_note"),
     scheduled_at: timestamptz("scheduled_at"),
     published_url: text("published_url"),
+    published_at: timestamptz("published_at"),
+    publish_error: text("publish_error"),
+    revision_token: text("revision_token"),
+    revision_started_at: timestamptz("revision_started_at"),
+    schedule_attempts: integer("schedule_attempts").notNull().default(0),
     created_at: createdAt(),
   },
   (t) => [
@@ -247,8 +257,21 @@ export const drafts = pgTable(
       t.version,
     ),
     index("drafts_workspace_campaign_idx").on(t.workspace_id, t.campaign_id),
+    index("drafts_due_idx").on(t.status, t.scheduled_at),
   ],
-);
+).enableRLS();
+
+export const publications = pgTable("publications", {
+  id: id(),
+  draft_id: text("draft_id").notNull().references(() => drafts.id, { onDelete: "restrict" }),
+  workspace_id: text("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+  provider: text("provider").notNull(),
+  status: text("status").$type<PublicationStatus>().notNull().default("claimed"),
+  external_url: text("external_url"),
+  error: text("error"),
+  created_at: createdAt(),
+  updated_at: timestamptz("updated_at").notNull().defaultNow(),
+}, (table) => [index("publications_draft_idx").on(table.draft_id, table.created_at)]).enableRLS();
 
 // ---------------------------------------------------------------------------
 // run_steps — an append-only log of every orchestrator/agent step
@@ -277,4 +300,4 @@ export const runSteps = pgTable(
   (t) => [
     index("run_steps_campaign_created_idx").on(t.campaign_id, t.created_at),
   ],
-);
+).enableRLS();

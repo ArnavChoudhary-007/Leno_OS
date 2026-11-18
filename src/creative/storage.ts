@@ -3,7 +3,9 @@ import path from "node:path";
 import { PlatformIdSchema } from "@/shared/schemas";
 import type { PlatformId } from "@/shared/types";
 
-const UPLOAD_ROOT = process.env.UPLOAD_DIR ?? path.join(process.cwd(), "uploads");
+const UPLOAD_ROOT = process.env.UPLOAD_DIR || path.join(process.cwd(), "uploads");
+
+if (!path.isAbsolute(UPLOAD_ROOT)) throw new Error("UPLOAD_DIR must be an absolute path");
 
 export function campaignUploadDir(
   workspaceId: string,
