@@ -1,5 +1,6 @@
 import { getEnabledPlaybooks } from "./platforms";
 import { LINKEDIN_WRITING_RULES } from "./platforms/linkedin-rules";
+import { INSTAGRAM_WRITING_RULES } from "./platforms/instagram-rules";
 import { getModelContext } from "@/tools/run-context";
 
 /**
@@ -44,13 +45,19 @@ export function playbookBlock(platforms: string[]): string {
     )
     .join("\n\n");
 
-  if (!platforms.includes("linkedin")) return body;
-
   return [
     body,
-    "",
-    "=== LINKEDIN SPECIALIST ===",
-    LINKEDIN_WRITING_RULES,
-    "=== END LINKEDIN SPECIALIST ===",
+    ...(platforms.includes("linkedin") ? [
+      "",
+      "=== LINKEDIN SPECIALIST ===",
+      LINKEDIN_WRITING_RULES,
+      "=== END LINKEDIN SPECIALIST ===",
+    ] : []),
+    ...(platforms.includes("instagram") ? [
+      "",
+      "=== INSTAGRAM SPECIALIST ===",
+      INSTAGRAM_WRITING_RULES,
+      "=== END INSTAGRAM SPECIALIST ===",
+    ] : []),
   ].join("\n");
 }

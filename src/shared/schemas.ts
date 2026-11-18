@@ -210,12 +210,21 @@ export const InviteCreateSchema = z.object({
   role: z.enum(["viewer", "editor", "admin"]),
 });
 
+export const InstagramFormatSchema = z.enum(["caption", "carousel", "story"]);
+
+export const CarouselQuerySchema = z.object({
+  draftId: z.string().uuid(),
+  slide: z.string().regex(/^(0|[1-9]\d*)$/).default("0")
+    .transform(Number).pipe(z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)),
+});
+
 export const PlanSchema = z.object({
   goal: z.string(),
   audience: z.string(),
   key_message: z.string(),
   /** Only platforms whose playbook is enabled; enforced in agents/orchestrator/plan.ts. */
   platforms: z.array(PlatformIdSchema).min(1),
+  instagram_format: InstagramFormatSchema.optional(),
 });
 
 /**

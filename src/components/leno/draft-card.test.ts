@@ -32,6 +32,29 @@ function render(overrides: Partial<DraftCardData> = {}, canMutate = true, isAdmi
 }
 
 describe("draft card affordances", () => {
+  it("exports explicit Instagram slides even when a campaign photo exists", () => {
+    const html = render({ platform: "instagram", body: "A hook.\nSlide 1: A useful idea.\nSlide 2: Save this.", image_url: "/saved-photo.jpeg" });
+    assert.match(html, /Instagram carousel/);
+    assert.match(html, />Copy caption</);
+    assert.match(html, />Copy script</);
+    assert.match(html, /1080 x 1350 JPEG/);
+    assert.match(html, /api\/og\/carousel\?draftId=draft-1&amp;slide=0/);
+    assert.match(html, /aspect-\[4\/5\]/);
+    assert.match(html, /saved-photo\.jpeg/);
+    assert.doesNotMatch(html, /api\/images/);
+    assert.doesNotMatch(html, /Publish to Instagram/);
+  });
+
+  it("shows story scripts without pretending stickers are interactive exports", () => {
+    const html = render({ platform: "instagram", body: "Story 1: A useful idea.\nStory 2: Add a poll sticker." });
+    assert.match(html, /Instagram story script \(2 frames\)/);
+    assert.match(html, />Copy script</);
+    assert.match(html, /Add interactive stickers in Instagram/);
+    assert.match(html, /Add a poll sticker/);
+    assert.doesNotMatch(html, /Carousel \(/);
+    assert.doesNotMatch(html, /Open PNG/);
+  });
+
   it("keeps unsupported platforms export-only even when Bluesky is connected", () => {
     for (const platform of ["instagram", "threads", "facebook"]) {
       const html = render({ platform });

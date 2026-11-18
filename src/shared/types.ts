@@ -22,6 +22,8 @@ import type {
   DraftStatusSchema,
   ErrorCodeSchema,
   PlanSchema,
+  InstagramFormatSchema,
+  CarouselQuerySchema,
   PlatformIdSchema,
   WorkspaceRoleSchema,
   PlatformNotesSchema,
@@ -51,6 +53,8 @@ export type CampaignOptions = z.infer<typeof CampaignOptionsSchema>;
 export type PublicationStatus = z.infer<typeof PublicationStatusSchema>;
 export type CampaignSummary = z.infer<typeof CampaignSummarySchema>;
 export type Plan = z.infer<typeof PlanSchema>;
+export type InstagramFormat = z.infer<typeof InstagramFormatSchema>;
+export type CarouselQuery = z.infer<typeof CarouselQuerySchema>;
 export type PlatformNotes = z.infer<typeof PlatformNotesSchema>;
 export type Strategy = z.infer<typeof StrategySchema>;
 export type ImageFitSpec = z.infer<typeof ImageFitSpecSchema>;

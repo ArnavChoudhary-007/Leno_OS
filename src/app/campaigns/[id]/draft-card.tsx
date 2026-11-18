@@ -5,7 +5,8 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { inputClass, textareaClass } from "@/app/brand/field";
-import { PLATFORM_PLAYBOOKS, composePost } from "@/agents/platforms";
+import { PLATFORM_PLAYBOOKS, composePost, composeDraftExport } from "@/agents/platforms";
+import { splitInstagramBody } from "@/agents/platforms/instagram-rules";
 import { apiErrorMessage } from "@/lib/api-error";
 import type { CriticNotes, DraftReview, DraftStatus, PlatformId, PublishDestinations } from "@/shared/types";
 import { DraftCreative } from "./draft-creative";
@@ -88,6 +89,8 @@ export function DraftCard({
     hashtags: draft.hashtags ?? [],
   });
   const limit = playbook?.maxChars ?? 0;
+  const instagram = platform === "instagram" ? splitInstagramBody(draft.body) : null;
+  const hasScript = Boolean(instagram?.slides.length || instagram?.stories.length);
 
   const [editing, setEditing] = useState(false);
   const [body, setBody] = useState(draft.body);
@@ -172,10 +175,12 @@ export function DraftCard({
     });
   }
 
-  async function copyPost() {
+  async function copyPost(includeScript = false) {
     try {
-      await navigator.clipboard.writeText(composed);
-      toast.success("Copied post");
+      await navigator.clipboard.writeText(includeScript
+        ? composeDraftExport({ platform, body: draft.body, hashtags: draft.hashtags ?? [] })
+        : composed);
+      toast.success(includeScript ? "Copied creative script" : "Copied post");
     } catch {
       toast.error("Could not copy");
     }
@@ -208,9 +213,12 @@ export function DraftCard({
             ) : null}
           </p>
         </div>
-        <Button type="button" variant="outline" size="sm" onClick={copyPost}>
-          Copy
-        </Button>
+        <div className="flex gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={() => copyPost(false)}>
+            {hasScript ? "Copy caption" : "Copy"}
+          </Button>
+          {hasScript ? <Button type="button" variant="outline" size="sm" onClick={() => copyPost(true)}>Copy script</Button> : null}
+        </div>
       </header>
 
       {!locked && editing ? (

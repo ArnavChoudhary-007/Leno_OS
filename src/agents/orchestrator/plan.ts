@@ -41,6 +41,7 @@ export async function plan(
       "goal: one sentence, measurable, what this campaign is for.",
       "audience: who specifically, grounded in the brand's audience.",
       "key_message: the single idea every post must land. One sentence.",
+      "instagram_format: caption, carousel, or story. Choose carousel or story only when the brief asks for that format; otherwise choose caption.",
     ].join("\n"),
   });
 
@@ -53,6 +54,7 @@ export async function plan(
     object: {
       ...result.object,
       platforms: requested ? enabled : platforms.length > 0 ? [...new Set(platforms)] : enabled,
+      instagram_format: result.object.instagram_format ?? "caption",
     },
   };
 }

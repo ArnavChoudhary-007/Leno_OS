@@ -57,7 +57,7 @@ Every draft is scored 0–1 on four weighted criteria:
 
 A draft passes at a weighted score of **0.8** *and* only if it clears the
 hard gates the model can't overrule: platform character limits, banned
-terms and LinkedIn-specific rules. Drafts that fail get a fix list and are
+terms and platform-specific rules. Drafts that fail get a fix list and are
 revised, up to **3 rounds**, then escalated to a human.
 
 ### Platforms
@@ -71,7 +71,16 @@ revised, up to **3 rounds**, then escalated to a human.
 | Facebook | ⏸️ Planned | — | — |
 
 **Publishing:** approved LinkedIn drafts post to the workspace's connected
-LinkedIn account (OAuth). Other platforms publish through Bluesky.
+LinkedIn account (OAuth). X-format drafts publish through Bluesky. Instagram
+and Threads are export-only; Facebook remains disabled.
+
+**Instagram specialist:** captions, explicitly requested carousels and story
+scripts share the existing writer/critic loop. Deterministic checks cover
+hooks, hashtags, emoji, carousel structure and story sticker instructions.
+Carousel slides export as authenticated 1080 x 1350 JPEGs; Copy caption and
+Copy script keep caption text and creative instructions separate. Stories
+require native assembly and interactive stickers in Instagram. See
+`docs/INSTAGRAM_SPECIALIST.md` for integration details.
 
 ---
 
@@ -86,7 +95,8 @@ LinkedIn account (OAuth). Other platforms publish through Bluesky.
   a note that the agents use to revise.
 - **Images:** upload a photo or let GPT Image 1.5 make one, then get it
   auto-cropped per platform. Branded quote cards and carousel slides are
-  rendered with `next/og`.
+  rendered with `next/og`; explicit Instagram carousel slides use branded SVGs
+  rasterized by the existing `sharp` dependency.
 - **Workspaces and roles:** invite-only teams with owner, admin, editor and
   viewer roles.
 - **Public demo mode:** a single setting that skips sign-in for judges and
