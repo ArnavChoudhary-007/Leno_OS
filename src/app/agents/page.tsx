@@ -4,7 +4,7 @@ import { AppShell } from "@/components/app-shell";
 import { NoWorkspace } from "@/components/no-workspace";
 import type { AgentInfo } from "@/components/leno/agent-drawer";
 import { workspaceCampaignStats } from "@/db/queries/campaigns";
-import { workspaceDraftStats } from "@/db/queries/drafts";
+import { listWorkspaceLatestDrafts } from "@/db/queries/drafts";
 import { latestWorkspaceRunStep } from "@/db/queries/runs";
 import { AgentsView } from "./agents-view";
 
@@ -14,8 +14,8 @@ export default async function AgentsPage() {
   const ctx = await loadPageAuth();
   if (!ctx) return <NoWorkspace />;
 
-  const [stats, campaignStats, lastStep] = await Promise.all([
-    workspaceDraftStats(ctx.workspaceId),
+  const [posts, campaignStats, lastStep] = await Promise.all([
+    listWorkspaceLatestDrafts(ctx.workspaceId, null),
     workspaceCampaignStats(ctx.workspaceId),
     latestWorkspaceRunStep(ctx.workspaceId),
   ]);
@@ -24,6 +24,13 @@ export default async function AgentsPage() {
     ? new Date(lastStep.created_at).toLocaleString()
     : "Waiting for first run";
   const current = lastStep ? lastStep.step : "Idle";
+  const platformCounts = new Map<string, number>();
+  for (const post of posts) platformCounts.set(post.platform, (platformCounts.get(post.platform) ?? 0) + 1);
+  const platformLastActive = (platform: string) => {
+    const latest = posts.filter((post) => post.platform === platform)
+      .sort((first, second) => new Date(second.created_at).getTime() - new Date(first.created_at).getTime())[0];
+    return latest ? new Date(latest.created_at).toLocaleString() : "No drafts yet";
+  };
 
   const agents: AgentInfo[] = [
     {
@@ -33,8 +40,9 @@ export default async function AgentsPage() {
       status: live ? "Running" : "Ready",
       statusType: live ? "green" : "blue",
       currentTask: live ? current : "Coordinating tasks",
-      tasksCompleted: stats.total,
-      uptime: "On-brand",
+      tasksCompleted: campaignStats.total,
+      countLabel: "Campaigns tracked",
+      availability: "Configured",
       lastActive,
       capabilities: [
         "Task routing",
@@ -50,9 +58,10 @@ export default async function AgentsPage() {
       status: "Active",
       statusType: "green",
       currentTask: "Long-form posts",
-      tasksCompleted: stats.total,
-      uptime: "Enabled",
-      lastActive,
+      tasksCompleted: platformCounts.get("linkedin") ?? 0,
+      countLabel: "Current drafts",
+      availability: "Configured",
+      lastActive: platformLastActive("linkedin"),
       capabilities: [
         "Long-form posts",
         "Brand voice",
@@ -67,9 +76,10 @@ export default async function AgentsPage() {
       status: "Active",
       statusType: "green",
       currentTask: "Carousel copy",
-      tasksCompleted: stats.total,
-      uptime: "Enabled",
-      lastActive,
+      tasksCompleted: platformCounts.get("instagram") ?? 0,
+      countLabel: "Current drafts",
+      availability: "Export only",
+      lastActive: platformLastActive("instagram"),
       capabilities: ["Carousel copy", "Hashtag clustering", "Visual captions"],
     },
     {
@@ -79,9 +89,10 @@ export default async function AgentsPage() {
       status: "Active",
       statusType: "green",
       currentTask: "Short-form hooks",
-      tasksCompleted: stats.total,
-      uptime: "Enabled",
-      lastActive,
+      tasksCompleted: platformCounts.get("x") ?? 0,
+      countLabel: "Current drafts",
+      availability: "Bluesky publishing",
+      lastActive: platformLastActive("x"),
       capabilities: ["Thread crafting", "Character budgeting", "Punchy CTAs"],
     },
   ];

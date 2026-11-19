@@ -22,6 +22,8 @@ export type TrackStage =
   | "Review"
   | "Approved"
   | "Scheduled"
+  | "Publishing"
+  | "Publication failed"
   | "Published";
 
 export const TRACK_STAGES: TrackStage[] = [
@@ -30,11 +32,48 @@ export const TRACK_STAGES: TrackStage[] = [
   "Review",
   "Approved",
   "Scheduled",
+  "Publishing",
+  "Publication failed",
   "Published",
 ];
 
 export function isPlatformId(value: string): value is PlatformId {
-  return value in PLATFORM_LABEL;
+  return Object.hasOwn(PLATFORM_LABEL, value);
+}
+
+export function nativePublishDestination(platform: string): string | null {
+  if (platform === "linkedin") return "LinkedIn";
+  if (platform === "x") return "Bluesky";
+  return null;
+}
+
+export function canEditDraft(status: string): boolean {
+  return status === "draft" || status === "needs_human" || status === "approved" || status === "rejected";
+}
+
+export function canApproveDraft(status: string): boolean {
+  return status === "draft" || status === "needs_human" || status === "rejected";
+}
+
+export function inDateWindow(timestamp: string | null, days: number, now = new Date()): boolean {
+  if (!timestamp || days < 1) return false;
+  const time = new Date(timestamp).getTime();
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - days + 1);
+  return Number.isFinite(time) && time >= start.getTime() && time <= now.getTime();
+}
+
+export function draftWindow<Row extends { created_at: string; published_at: string | null; status: string }>(
+  rows: Row[], days: number, now = new Date(),
+): { created: Row[]; published: Row[]; publishedFromCreated: number } {
+  const created = rows.filter((row) => inDateWindow(row.created_at, days, now));
+  const published = rows.filter((row) => row.status === "published" && inDateWindow(row.published_at, days, now));
+  return {
+    created,
+    published,
+    publishedFromCreated: created.filter((row) => row.status === "published" && inDateWindow(row.published_at, days, now)).length,
+  };
 }
 
 export function platformLabel(platform: string): string {
@@ -47,7 +86,9 @@ export function draftStage(draft: {
   score: number | null;
 }): TrackStage {
   if (draft.status === "published") return "Published";
-  if (draft.scheduled_at) return "Scheduled";
+  if (draft.status === "publishing") return "Publishing";
+  if (draft.status === "publish_failed") return "Publication failed";
+  if (draft.status === "approved" && draft.scheduled_at) return "Scheduled";
   if (draft.status === "approved") return "Approved";
   if (draft.status === "needs_human" || draft.status === "rejected") {
     return "Review";
@@ -62,7 +103,10 @@ export function stageBadgeClass(stage: TrackStage): string {
     case "Approved":
       return "badge-green";
     case "Scheduled":
+    case "Publishing":
       return "badge-blue";
+    case "Publication failed":
+      return "badge-red";
     case "Review":
       return "badge-amber";
     case "Validated":
@@ -101,8 +145,8 @@ export type ChartPoint = {
 export function bucketByDay(
   timestamps: string[],
   days: number,
+  now = new Date(),
 ): ChartPoint[] {
-  const now = new Date();
   const counts = new Map<string, number>();
   for (let i = days - 1; i >= 0; i -= 1) {
     const d = new Date(now);
@@ -112,7 +156,7 @@ export function bucketByDay(
   }
   for (const stamp of timestamps) {
     const d = new Date(stamp);
-    if (Number.isNaN(d.getTime())) continue;
+    if (Number.isNaN(d.getTime()) || d > now) continue;
     d.setHours(0, 0, 0, 0);
     const key = dayKey(d);
     if (counts.has(key)) counts.set(key, (counts.get(key) ?? 0) + 1);
@@ -125,7 +169,7 @@ export function bucketByDay(
       maxVal = val;
       maxIdx = idx;
     }
-    const d = new Date(key);
+    const d = new Date(`${key}T00:00:00`);
     return {
       date: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
       val,

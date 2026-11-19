@@ -10,6 +10,11 @@ approves the result. Only then does plain, deterministic code publish it.
 
 Agents never publish. A person always has the final say.
 
+**Publishing support:** LinkedIn publishes to a connected LinkedIn account;
+the X-format draft publishes to **Bluesky**, not to X itself. Instagram and
+Threads are **export-only**: copy/download the approved content and publish
+it yourself. They have no native publishing integration or automatic scheduler.
+
 ---
 
 ## How it works
@@ -52,7 +57,7 @@ Every draft is scored 0–1 on four weighted criteria:
 
 A draft passes at a weighted score of **0.8** *and* only if it clears the
 hard gates the model can't overrule: platform character limits, banned
-terms and LinkedIn-specific rules. Drafts that fail get a fix list and are
+terms and platform-specific rules. Drafts that fail get a fix list and are
 revised, up to **3 rounds**, then escalated to a human.
 
 ### Platforms
@@ -66,7 +71,16 @@ revised, up to **3 rounds**, then escalated to a human.
 | Facebook | ⏸️ Planned | — | — |
 
 **Publishing:** approved LinkedIn drafts post to the workspace's connected
-LinkedIn account (OAuth). Other platforms publish through Bluesky.
+LinkedIn account (OAuth). X-format drafts publish through Bluesky. Instagram
+and Threads are export-only; Facebook remains disabled.
+
+**Instagram specialist:** captions, explicitly requested carousels and story
+scripts share the existing writer/critic loop. Deterministic checks cover
+hooks, hashtags, emoji, carousel structure and story sticker instructions.
+Carousel slides export as authenticated 1080 x 1350 JPEGs; Copy caption and
+Copy script keep caption text and creative instructions separate. Stories
+require native assembly and interactive stickers in Instagram. See
+`docs/INSTAGRAM_SPECIALIST.md` for integration details.
 
 ---
 
@@ -81,7 +95,8 @@ LinkedIn account (OAuth). Other platforms publish through Bluesky.
   a note that the agents use to revise.
 - **Images:** upload a photo or let GPT Image 1.5 make one, then get it
   auto-cropped per platform. Branded quote cards and carousel slides are
-  rendered with `next/og`.
+  rendered with `next/og`; explicit Instagram carousel slides use branded SVGs
+  rasterized by the existing `sharp` dependency.
 - **Workspaces and roles:** invite-only teams with owner, admin, editor and
   viewer roles.
 - **Public demo mode:** a single setting that skips sign-in for judges and
@@ -134,6 +149,10 @@ npm run bootstrap-owner -- --email=you@example.com --password=YourPassword
 npm run dev                 # http://localhost:3000
 ```
 
+In a second terminal, after applying migrations, start `npm run scheduler`.
+The web server alone does not deliver scheduled drafts. The worker polls
+every 30 seconds and drains its current work on SIGINT/SIGTERM.
+
 Check it's alive: `GET /api/health` returns `{ "ok": true }`.
 
 > **Loopwave Audio** is a fictional brand used for demos. Edit it on
@@ -146,6 +165,12 @@ Check it's alive: `GET /api/health` returns `{ "ok": true }`.
 All variables are in `.env.example` and validated at startup by
 `src/env.ts`. Set `SKIP_ENV_VALIDATION=1` for CI or Docker builds that
 compile without secrets.
+
+`SKIP_ENV_VALIDATION=1` is **build/test only**; do not set it for the app,
+CLI publishing commands, or scheduler. During `next build` only, a missing
+`DATABASE_URL` uses an inert loopback URL without connecting to a database.
+At runtime a missing database URL still fails. Real deployments need the
+required variables below in both the web process and scheduler.
 
 ### Required
 
@@ -166,7 +191,7 @@ compile without secrets.
 | Variable | What it enables |
 | --- | --- |
 | `OPENAI_API_KEY`, `IMAGE_MODEL`, `IMAGE_SIZE` | Image generation when no photo is uploaded (`gpt-image-1.5`, `1024x1024` only) |
-| `IMAGE_STORAGE_DIR` | Where campaign images are stored. Defaults to `./storage/images`; on a server use a path outside the repo, e.g. `/home/ubuntu/leno-storage/images` |
+| `UPLOAD_DIR` | Campaign originals and fitted images; defaults to `./uploads`. Use the same persistent, writable directory for the web process and scheduler; Compose sets `/app/uploads` on a shared named volume. |
 | `TAVILY_API_KEY` | Live web research for LinkedIn drafts (skipped if unset) |
 | `LINKEDIN_CLIENT_ID`, `LINKEDIN_CLIENT_SECRET` | Connect LinkedIn and publish to it. Redirect URL: `{APP_URL}/api/integrations/linkedin/callback` |
 | `BLUESKY_HANDLE`, `BLUESKY_APP_PASSWORD` | Publish to Bluesky |
@@ -193,6 +218,9 @@ compile without secrets.
 | `npm run build` / `npm run start` | Production build / server |
 | `npm run lint` · `npm run typecheck` · `npm run test` | Quality checks |
 | `npm run test:db` | Database query tests (needs a live `DATABASE_URL`) |
+| `npm test` | Portable Node test runner; discovers `src/**/*.test.ts`, excluding `src/db/**`; no credentials or database required |
+| `npm run test:images` | Synthetic image fixtures checked against the active creative fitter and platform specs |
+| `npm run scheduler` | Run the scheduled-publishing worker; migrate first, keep dependencies including `tsx` installed |
 | `npm run db:migrate` | Apply migrations in `drizzle/` |
 | `npm run db:generate` | Create a migration after changing `src/db/schema.ts` |
 | `npm run db:seed` | Load the Loopwave demo brand |
@@ -225,7 +253,8 @@ git clone https://github.com/ArnavChoudhary-007/Leno_OS.git
 cd Leno_OS
 cp .env.example .env && nano .env
 echo "APP_URL=http://$(curl -s http://checkip.amazonaws.com):3000" >> .env   # if APP_URL isn't set
-mkdir -p ~/leno-storage/images
+mkdir -p ~/leno-uploads
+# Set UPLOAD_DIR=/home/ubuntu/leno-uploads in .env (adjust for your user).
 ```
 
 **3. Set up the database and deploy:**
@@ -263,6 +292,35 @@ cd ~/Leno_OS && git pull && ./scripts/deploy.sh
 > redeploy after each restart.
 
 ---
+
+## Scheduled publishing and recovery
+
+Apply `npm run db:migrate` **before starting either production process**.
+PM2 starts `leno-os` and `leno-os-scheduler`; `scripts/deploy.sh` starts or
+reloads both. Keep a full `npm ci` install: the scheduler runs TypeScript
+through `tsx` and needs `scripts/`, `src/`, and `tsconfig.json`, not just
+Next's standalone output. Run one scheduler process per deployment.
+
+`docker compose up -d --build` runs the one-shot migration service first,
+then starts the standalone web image and the separate `worker` image. Both
+run as the non-root `node` user and share the writable `uploads` volume at
+`/app/uploads`. That volume survives rebuilds and ordinary `down`; do not
+use `docker compose down -v` unless intentionally deleting uploaded media.
+Back up uploads separately from Postgres. For existing bind mounts, ensure
+UID/GID 1000 can write before starting the services.
+
+Only human-approved drafts on supported publishers can be scheduled.
+Keep provider credentials available to the worker: LinkedIn OAuth client
+configuration and a connected account, or the Bluesky handle/app password.
+The worker uses the same database, `PUBLIC_DEMO`, and media directory as
+the web process. In `PUBLIC_DEMO=1`, both immediate and worker publishing
+must remain disabled; do not run a non-demo worker against a demo database.
+
+A timeout or crash after contacting a provider can leave the publication
+outcome **unknown**. Do not blindly retry it: an operator must inspect the
+provider account, compare the content/time, and reconcile the saved
+publication state and provider URL/ID before deliberately retrying. A
+database transaction cannot undo a post that a remote provider accepted.
 
 ## Public demo mode
 

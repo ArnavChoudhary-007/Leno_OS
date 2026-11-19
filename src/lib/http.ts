@@ -51,13 +51,6 @@ export function assertSameOrigin(request: Request): void {
 
   if (origin === allowed) return;
 
-  try {
-    const host = new URL(origin).hostname;
-    if (host === "localhost" || host === "127.0.0.1") return;
-  } catch {
-    throw new AppError("forbidden");
-  }
-
   throw new AppError("forbidden");
 }
 

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
+import { authorizeMutation } from "@/auth/mutation";
 import { recoverStuckRuns } from "@/agents/orchestrator/recover";
-import { requireAuthContext, requireCan } from "@/auth/server";
+import { requireAuthContext } from "@/auth/server";
 import { isAdminRole } from "@/authz/can";
 import {
   getCampaignInWorkspace,
@@ -9,7 +10,6 @@ import {
 import { getCurrentDraftsByPlatform } from "@/db/queries/drafts";
 import { getRunSteps, type RunStep } from "@/db/queries/runs";
 import {
-  assertSameOrigin,
   catchRouteError,
   jsonErrorCode,
   requestIdFrom,
@@ -47,7 +47,7 @@ export async function GET(
     if (!campaign) throw new AppError("not_found", "Campaign not found");
 
     const [steps, drafts, linkedin] = await Promise.all([
-      getRunSteps(id),
+      getRunSteps(id, campaign.started_at),
       getCurrentDraftsByPlatform(id),
       linkedinConnected(ctx.workspaceId),
     ]);
@@ -60,6 +60,7 @@ export async function GET(
         bluesky: blueskyConfigured(),
         linkedin,
       },
+      canReconcile: isAdminRole(ctx.role),
     });
     res.headers.set("x-request-id", requestId);
     return res;
@@ -77,9 +78,7 @@ export async function POST(
 ) {
   const requestId = requestIdFrom(request);
   try {
-    assertSameOrigin(request);
-    const ctx = await requireAuthContext();
-    requireCan(ctx, "mutate");
+    const ctx = await authorizeMutation(request, "mutate", "campaign");
     const { id } = await params;
 
     const existing = await getCampaignInWorkspace(ctx.workspaceId, id);

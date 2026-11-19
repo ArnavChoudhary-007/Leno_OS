@@ -1,4 +1,4 @@
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, gte } from "drizzle-orm";
 import { db } from "@/db/client";
 import { runSteps } from "@/db/schema";
 import type { RunPhase, RunStepName } from "@/shared/types";
@@ -40,11 +40,11 @@ export async function logStep(
   });
 }
 
-export async function getRunSteps(campaignId: string): Promise<RunStep[]> {
+export async function getRunSteps(campaignId: string, since?: string | null): Promise<RunStep[]> {
   return db
     .select()
     .from(runSteps)
-    .where(eq(runSteps.campaign_id, campaignId))
+    .where(and(eq(runSteps.campaign_id, campaignId), since ? gte(runSteps.created_at, since) : undefined))
     .orderBy(asc(runSteps.created_at));
 }
 
@@ -70,19 +70,6 @@ export async function listWorkspaceRunSteps(
     .orderBy(asc(runSteps.created_at));
 }
 
-/** When the campaign last showed signs of life — used to spot dead runs. */
-export async function getLastStepAt(
-  campaignId: string,
-): Promise<string | null> {
-  const [row] = await db
-    .select({ created_at: runSteps.created_at })
-    .from(runSteps)
-    .where(eq(runSteps.campaign_id, campaignId))
-    .orderBy(desc(runSteps.created_at))
-    .limit(1);
-  return row?.created_at ?? null;
-}
-
 /**
  * The most recent output for one step — how a later human-note revision
  * recovers the strategy the original run was written against.
@@ -100,11 +87,11 @@ export async function getLatestStepOutput(
   return row?.output ?? null;
 }
 
-export async function getModelsUsed(campaignId: string): Promise<string[]> {
+export async function getModelsUsed(campaignId: string, since?: string): Promise<string[]> {
   const rows = await db
     .select({ model: runSteps.model })
     .from(runSteps)
-    .where(eq(runSteps.campaign_id, campaignId));
+    .where(and(eq(runSteps.campaign_id, campaignId), since ? gte(runSteps.created_at, since) : undefined));
 
   return [...new Set(rows.map((r) => r.model).filter((m): m is string => !!m))];
 }

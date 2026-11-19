@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { PLATFORM_PLAYBOOKS } from "@/agents/platforms";
+import { splitInstagramBody } from "@/agents/platforms/instagram-rules";
 import { splitCarouselSlides } from "@/creative/slides";
 import type { PlatformId } from "@/shared/types";
 
@@ -18,8 +19,10 @@ export function DraftCreative({
 }) {
   const spec = PLATFORM_PLAYBOOKS[platform]?.imageSpec;
   const quoteUrl = `/api/og/quote?draftId=${encodeURIComponent(draftId)}`;
-  const slides = useMemo(() => splitCarouselSlides(body), [body]);
-  const showCarousel = !imageUrl && (platform === "instagram" || slides.length > 1);
+  const instagram = useMemo(() => platform === "instagram" ? splitInstagramBody(body) : null, [platform, body]);
+  const slides = useMemo(() => instagram?.slides.length ? instagram.slides : splitCarouselSlides(body), [instagram, body]);
+  const explicitCarousel = Boolean(instagram?.slides.length);
+  const showCarousel = explicitCarousel || (!instagram?.stories.length && !imageUrl && (platform === "instagram" || slides.length > 1));
 
   return (
     <div className="mt-3 space-y-3 border-t border-border pt-3">
@@ -46,7 +49,7 @@ export function DraftCreative({
             style={{ aspectRatio: `${spec.width} / ${spec.height}` }}
           />
         </div>
-      ) : (
+      ) : explicitCarousel || instagram?.stories.length ? null : (
         <div>
           <div className="mb-2 flex items-center justify-between gap-2">
             <p className="text-xs font-medium text-muted-foreground">Quote card</p>
@@ -71,7 +74,8 @@ export function DraftCreative({
       {showCarousel ? (
         <div>
           <p className="mb-2 text-xs font-medium text-muted-foreground">
-            Carousel ({slides.length} slides)
+            {explicitCarousel ? "Instagram carousel" : "Carousel"} ({slides.length} slides)
+            {explicitCarousel ? " - 1080 x 1350 JPEG" : ""}
           </p>
           <div className="flex gap-2 overflow-x-auto pb-1">
             {slides.map((_, index) => {
@@ -89,12 +93,21 @@ export function DraftCreative({
                   <img
                     src={url}
                     alt={`Carousel slide ${index + 1}`}
-                    className="aspect-square w-28 rounded-md border border-border bg-muted object-cover"
+                    className={`${explicitCarousel ? "aspect-[4/5]" : "aspect-square"} w-28 rounded-md border border-border bg-muted object-cover`}
                   />
                 </a>
               );
             })}
           </div>
+        </div>
+      ) : null}
+      {instagram?.stories.length ? (
+        <div>
+          <p className="mb-2 text-xs font-medium text-muted-foreground">Instagram story script ({instagram.stories.length} frames)</p>
+          <p className="mb-2 text-xs text-muted-foreground">Copy script exports the full script. Add interactive stickers in Instagram; they are instructions, not live controls.</p>
+          <ol className="list-decimal space-y-2 pl-5 text-sm">
+            {instagram.stories.map((story, index) => <li key={index}>{story}</li>)}
+          </ol>
         </div>
       ) : null}
     </div>

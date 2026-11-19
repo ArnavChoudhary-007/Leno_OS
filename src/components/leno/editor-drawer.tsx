@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Drawer } from "@/components/leno/drawer";
+import { DraftRevisionNote } from "@/components/leno/draft-revision-note";
 import { FeedPreview, QualityScorecard, type FeedAuthor } from "@/components/leno/feed-preview";
-import { PLATFORM_PLAYBOOKS } from "@/agents/platforms";
+import { PLATFORM_PLAYBOOKS, composePost, composeDraftExport } from "@/agents/platforms";
+import { DraftCreative } from "@/app/campaigns/[id]/draft-creative";
+import { splitInstagramBody } from "@/agents/platforms/instagram-rules";
 import { localToIso, reviewDraftOrThrow } from "@/lib/review-draft";
-import { platformLabel } from "@/lib/workspace-ui";
+import { canEditDraft, nativePublishDestination, platformLabel } from "@/lib/workspace-ui";
 import type { CritiqueScores, DraftStatus, PlatformId } from "@/shared/types";
 
 export type EditorDraft = {
@@ -20,9 +23,14 @@ export type EditorDraft = {
   scores: CritiqueScores | null;
   scheduled_at: string | null;
   image_url: string | null;
+  publish_error: string | null;
 };
 
-export function EditorDrawer({
+export function EditorDrawer(props: Parameters<typeof EditorDrawerSession>[0]) {
+  return <EditorDrawerSession key={props.draft?.id ?? "closed"} {...props} />;
+}
+
+function EditorDrawerSession({
   draft,
   author,
   canMutate,
@@ -33,31 +41,34 @@ export function EditorDrawer({
   author: FeedAuthor;
   canMutate: boolean;
   onClose: () => void;
-  onChanged: () => void;
+  onChanged: () => void | Promise<void>;
 }) {
   const [body, setBody] = useState(draft?.body ?? "");
   const [preview, setPreview] = useState(draft?.platform ?? "linkedin");
   const [scheduleLocal, setScheduleLocal] = useState("");
   const [pending, startTransition] = useTransition();
 
-  useEffect(() => {
-    setBody(draft?.body ?? "");
-    setPreview(draft?.platform ?? "linkedin");
-    setScheduleLocal("");
-  }, [draft]);
-
   const open = Boolean(draft);
   const platform = (draft?.platform ?? "linkedin") as PlatformId;
   const playbook = PLATFORM_PLAYBOOKS[platform];
   const limit = playbook?.maxChars ?? 3000;
-  const currentBody = draft ? body : "";
+  const editable = canMutate && Boolean(draft && canEditDraft(draft.status));
+  const currentBody = draft ? editable ? body : draft.body : "";
+  const caption = composePost({ platform, body: currentBody, hashtags: [] });
+  const composedLength = composePost({ platform, body: currentBody, hashtags: draft?.hashtags ?? [] }).length;
+  const destination = nativePublishDestination(platform);
+  const savedInstagram = platform === "instagram" && draft ? splitInstagramBody(draft.body) : null;
+  const imageExportUrl = draft && savedInstagram?.slides.length
+    ? `/api/og/carousel?draftId=${encodeURIComponent(draft.id)}&slide=0`
+    : draft?.image_url ?? `/api/og/quote?draftId=${encodeURIComponent(draft?.id ?? "")}`;
+  const hasImageExport = !savedInstagram?.stories.length || Boolean(draft?.image_url) || Boolean(savedInstagram?.slides.length);
 
   function run(label: string, fn: () => Promise<void>) {
     startTransition(async () => {
       try {
         await fn();
         toast.success(label);
-        onChanged();
+        await onChanged();
         onClose();
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Action failed");
@@ -83,6 +94,16 @@ export function EditorDrawer({
             </button>
           </div>
           <div className="editor-drawer-body">
+            <div className="flex gap-2">
+              <button type="button" className="btn btn-secondary" onClick={async () => {
+                try { await navigator.clipboard.writeText(composeDraftExport({ platform, body: currentBody, hashtags: draft.hashtags })); toast.success("Copied post"); }
+                catch { toast.error("Could not copy post"); }
+              }}>{platform === "instagram" ? "Copy draft and script" : "Copy post"}</button>
+              {hasImageExport ? <a className="btn btn-secondary" href={imageExportUrl} target="_blank" rel="noreferrer">Open image export</a> : null}
+            </div>
+            {draft.publish_error ? <p role="alert">Publication error: {draft.publish_error}</p> : null}
+            {draft.status === "publish_failed" ? <p role="alert">Publication outcome is uncertain. An admin must reconcile it before any retry. <a href={`/campaigns/${draft.campaign_id}`} className="underline">Open campaign for reconciliation</a></p> : null}
+            {!destination ? <p>Export-only platform. Copy and image export are available; native publishing and scheduling are not supported.</p> : null}
             <QualityScorecard scores={draft.scores} />
             <div className="tab-nav" style={{ width: "100%" }}>
               {(["linkedin", "instagram", "x"] as const).map((id) => (
@@ -99,7 +120,7 @@ export function EditorDrawer({
             <div className="preview-container-box">
               <FeedPreview
                 platform={preview}
-                body={currentBody}
+                body={caption}
                 hashtags={draft.hashtags}
                 imageUrl={draft.image_url}
                 author={author}
@@ -113,10 +134,10 @@ export function EditorDrawer({
                 <span
                   style={{
                     fontSize: "0.75rem",
-                    color: currentBody.length > limit ? "var(--status-red)" : "var(--text-muted)",
+                    color: composedLength > limit ? "var(--status-red)" : "var(--text-muted)",
                   }}
                 >
-                  {currentBody.length} / {limit} characters
+                  {composedLength} / {limit} caption characters including hashtags
                 </span>
               </div>
               <textarea
@@ -124,11 +145,17 @@ export function EditorDrawer({
                 className="input-field"
                 rows={6}
                 value={currentBody}
-                disabled={!canMutate || pending}
+                disabled={!editable || pending}
                 onChange={(e) => setBody(e.target.value)}
               />
             </div>
-            {canMutate ? (
+            {platform === "instagram" ? (
+              <div>
+                <p className="text-xs text-muted-foreground">Saved creative exports; copied draft text includes slide and story instructions.</p>
+                <DraftCreative draftId={draft.id} body={draft.body} platform={platform} imageUrl={draft.image_url} />
+              </div>
+            ) : null}
+            {editable ? (
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: "auto" }}>
                 <button type="button" className="btn btn-secondary" onClick={onClose}>
                   Cancel
@@ -138,19 +165,27 @@ export function EditorDrawer({
                   className="input-field"
                   style={{ width: 190 }}
                   value={scheduleLocal}
+                  disabled={pending || !destination}
+                  aria-label="Schedule date and time"
                   onChange={(e) => setScheduleLocal(e.target.value)}
                 />
                 <button
                   type="button"
                   className="btn btn-secondary"
-                  disabled={pending || !scheduleLocal}
+                  disabled={pending || !scheduleLocal || !destination || !body.trim()}
+                  title={destination ? `Schedule on ${destination}` : "Export-only: scheduling is unavailable"}
                   onClick={() => {
                     const iso = localToIso(scheduleLocal);
-                    if (!iso) return;
+                    if (!iso || new Date(iso).getTime() <= Date.now()) {
+                      toast.error("Choose a future date and time");
+                      return;
+                    }
                     run("Scheduled", () =>
                       reviewDraftOrThrow(draft.campaign_id, draft.id, {
                         action: "schedule",
                         scheduled_at: iso,
+                        body,
+                        hashtags: draft.hashtags,
                       }),
                     );
                   }}
@@ -161,7 +196,7 @@ export function EditorDrawer({
                   <button
                     type="button"
                     className="btn btn-secondary"
-                    disabled={pending}
+                    disabled={pending || !body.trim()}
                     onClick={() =>
                       run("Saved", () =>
                         reviewDraftOrThrow(draft.campaign_id, draft.id, {
@@ -178,11 +213,13 @@ export function EditorDrawer({
                 <button
                   type="button"
                   className="btn btn-primary"
-                  disabled={pending}
+                  disabled={pending || !body.trim()}
                   onClick={() =>
                     run("Approved", () =>
                       reviewDraftOrThrow(draft.campaign_id, draft.id, {
                         action: "approve",
+                        body,
+                        hashtags: draft.hashtags,
                       }),
                     )
                   }
@@ -191,6 +228,7 @@ export function EditorDrawer({
                 </button>
               </div>
             ) : null}
+            {editable && !pending && !draft.scheduled_at && body === draft.body ? <DraftRevisionNote draftId={draft.id} onChanged={async () => { await onChanged(); onClose(); }} /> : null}
           </div>
         </div>
       ) : null}

@@ -26,6 +26,7 @@ export type TrackPost = {
   scheduled_at: string | null;
   campaign_goal: string | null;
   campaign_brief: string;
+  publish_error: string | null;
 };
 
 const STEP_COPY: Record<string, string> = {
@@ -134,7 +135,7 @@ export function TrackBoard({
       </div>
 
       <TrackDrawer
-        draft={open}
+        draft={open ? posts.find((post) => post.id === open.id) ?? null : null}
         milestones={milestones}
         canMutate={canMutate}
         onClose={() => setOpen(null)}

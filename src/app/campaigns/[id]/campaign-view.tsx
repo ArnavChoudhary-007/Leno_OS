@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/empty-state";
 import { Badge } from "@/components/ui/badge";
@@ -9,7 +10,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiErrorMessage } from "@/lib/api-error";
 import { cn } from "@/lib/utils";
-import type { CampaignStatus, Plan, PublishDestinations } from "@/shared/types";
+import type { CampaignStatus, CampaignSummary, Plan, PublishDestinations } from "@/shared/types";
 import { DraftCard, type DraftCardData } from "./draft-card";
 import { StepTimeline, type TimelineStep } from "./step-timeline";
 
@@ -20,6 +21,8 @@ type CampaignPayload = {
     goal: string | null;
     plan: Plan | null;
     status: CampaignStatus;
+    llm_calls: number;
+    summary: CampaignSummary | null;
     created_at: string;
   };
   steps: TimelineStep[];
@@ -78,20 +81,22 @@ function CampaignSkeleton() {
   );
 }
 
-export function CampaignView({ campaignId }: { campaignId: string }) {
+export function CampaignView({ campaignId, canMutate = false, isAdmin = false }: { campaignId: string; canMutate?: boolean; isAdmin?: boolean }) {
+  const router = useRouter();
   const [data, setData] = useState<CampaignPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
   const prevStatus = useRef<CampaignStatus | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     try {
       const res = await fetch(`/api/campaigns/${campaignId}`, {
         cache: "no-store",
+        signal,
       });
       if (!res.ok) {
         if (res.status === 401) {
-          window.location.assign(
+          router.replace(
             `/sign-in?next=${encodeURIComponent(`/campaigns/${campaignId}`)}`,
           );
           return;
@@ -107,26 +112,33 @@ export function CampaignView({ campaignId }: { campaignId: string }) {
         return;
       }
       const json = (await res.json()) as CampaignPayload;
+      if (signal?.aborted) return;
       setData(json);
       setError(null);
     } catch {
+      if (signal?.aborted) return;
       setError("Could not reach the server — check your connection.");
     }
-  }, [campaignId]);
+  }, [campaignId, router]);
 
   useEffect(() => {
-    void load();
+    const controller = new AbortController();
+    const id = window.setTimeout(() => { void load(controller.signal); }, 0);
+    return () => { window.clearTimeout(id); controller.abort(); };
   }, [load]);
 
+  const shouldPoll = Boolean(data && (!TERMINAL.includes(data.campaign.status) || data.drafts.some((draft) => draft.status === "publishing")));
   useEffect(() => {
-    if (!data) return;
-    if (TERMINAL.includes(data.campaign.status)) return;
-
-    const id = window.setInterval(() => {
-      void load();
-    }, 1000);
-    return () => window.clearInterval(id);
-  }, [data, load]);
+    if (!shouldPoll) return;
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout>;
+    async function poll() {
+      await load(controller.signal);
+      if (!controller.signal.aborted) timer = setTimeout(() => { void poll(); }, 1000);
+    }
+    timer = setTimeout(() => { void poll(); }, 1000);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [shouldPoll, load]);
 
   useEffect(() => {
     if (!data) return;
@@ -160,6 +172,8 @@ export function CampaignView({ campaignId }: { campaignId: string }) {
       toast.success("Campaign re-queued");
       prevStatus.current = "queued";
       await load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not retry campaign");
     } finally {
       setRetrying(false);
     }
@@ -215,7 +229,7 @@ export function CampaignView({ campaignId }: { campaignId: string }) {
           <Badge variant={statusVariant(campaign.status)} live={live}>
             {statusLabel(campaign.status)}
           </Badge>
-          {(campaign.status === "failed" ||
+          {canMutate && (campaign.status === "failed" ||
             campaign.status === "needs_human" ||
             campaign.status === "ready") && (
             <Button
@@ -268,6 +282,10 @@ export function CampaignView({ campaignId }: { campaignId: string }) {
 
       <section className="card">
         <h2 className="card-title">Pipeline</h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Run provider attempts: {campaign.summary?.totals.provider_attempts ?? campaign.llm_calls}
+          {campaign.summary?.totals.logical_calls !== undefined ? ` / Agent calls: ${campaign.summary.totals.logical_calls}` : ""}
+        </p>
         <div className="mt-4">
           <StepTimeline steps={steps} />
         </div>
@@ -300,7 +318,9 @@ export function CampaignView({ campaignId }: { campaignId: string }) {
                 key={draft.id}
                 draft={draft}
                 destinations={data.destinations}
-                onChanged={load}
+                canMutate={canMutate}
+                isAdmin={isAdmin}
+                onChanged={() => load()}
               />
             ))}
           </div>

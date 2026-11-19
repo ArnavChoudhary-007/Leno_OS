@@ -1,151 +1,131 @@
-# Database architecture (decided)
+# Database architecture
 
-This is the locked design for Digital Distribution OS. It starts from the
-four-table layout already in `src/db/schema.ts`, keeps what the pipeline
-actually uses, and closes the gaps that would break publishing, review, or
-Supabase security.
+Schema source of truth: `src/db/schema.ts`. Input/output validation lives in
+`src/shared/schemas.ts`; inferred application types live in `src/shared/types.ts`.
+This document includes the workflow-integrity migration `0007`.
 
-## Access model
+## Access and tenancy
 
-| Concern | Decision |
-| --- | --- |
-| Engine | PostgreSQL on Supabase (free tier) |
-| App access | Next.js server only, via Drizzle + `postgres` (postgres.js) |
-| Connection | Transaction pooler URL at runtime (`prepare: false`); Session/Direct URL for `drizzle-kit migrate` |
-| Browser | Never talks to Postgres or PostgREST for app data |
-| Environments | Two Supabase projects: **dev** (local/CI) and **demo** (live). Same schema; different `DATABASE_URL` / `SUPABASE_*` |
-| Ownership | One shared database. Agents do not own tables — the orchestrator and plain query helpers read/write everything |
-
-Credentials stay in server-side `.env` only (`DATABASE_URL`, `SUPABASE_*`). Never ship them to the client.
+- Supabase hosts Postgres. Server code uses postgres.js and Drizzle over
+  `DATABASE_URL`, not PostgREST. DB route handlers use the Node.js runtime.
+- Supabase Auth provides sign-in; `workspace_members` maps an authenticated
+  user to one workspace and an owner/admin/editor/viewer role.
+- Every campaign, draft, run step, publication, brand profile and connection
+  belongs to a workspace. Browser resource lookups must include workspace scope.
+- RLS is enabled in both the Drizzle schema and migrations, with no public
+  policies. The server requires an appropriate direct database role; RLS is not
+  forced on the table owner. Never expose connection strings or service keys.
 
 ## Tables
 
-Four tables. No per-agent schemas.
-
-### `brand_profile` — company context (one active brand)
-
-| Column | Type | Notes |
-| --- | --- | --- |
-| `id` | text PK (UUID) | |
-| `name`, `one_liner`, `positioning`, `audience` | text | |
-| `products`, `competitors`, `tone_words`, `dos`, `donts` | jsonb string[] | tone_words 3–6 at the zod layer |
-| `example_posts` | jsonb | exactly 5 strings |
-| `primary_color`, `secondary_color` | text | `#RRGGBB` |
-| `updated_at` | timestamptz | |
-
-Loaded for every agent prompt through `getCompanyContext()` → `buildBrandCard()`.
-
-### `campaigns` — one brief, one run
-
-| Column | Type | Notes |
-| --- | --- | --- |
-| `id` | text PK (UUID) | |
-| `brief` | text | 20–2000 chars (zod) |
-| `goal` | text, nullable | Denormalized `plan.goal` for display/filter; set when the plan step lands |
-| `plan` | jsonb `Plan`, nullable | `{ goal, audience, key_message, platforms }` |
-| `status` | text | `queued` \| `running` \| `needs_human` \| `ready` \| `failed` |
-| `started_at` | timestamptz, nullable | Set when a run is claimed; used to reclaim stale `running` rows |
-| `created_at` | timestamptz | |
-
-Strategy is **not** a campaign column. It lives in `run_steps` (`step = 'strategy'`) so the audit trail stays the source of truth without duplicating a large jsonb on every campaign.
-
-### `drafts` — one row per platform per version
-
-| Column | Type | Notes |
-| --- | --- | --- |
-| `id` | text PK (UUID) | |
-| `campaign_id` | text FK → campaigns, **ON DELETE CASCADE** | |
-| `platform` | text | `x` \| `linkedin` \| `instagram` \| `threads` (facebook reserved in zod, playbook disabled) |
-| `version` | integer | 1 = first draft, +1 each revision |
-| `body` | text | Post text **without** hashtags |
-| `hashtags` | jsonb string[] | Stored separately so char limits and revisions stay accurate |
-| `image_url` | text, nullable | Per-platform cover-crop (`/api/media/campaigns/:id/:platform.jpg`) of the uploaded photo or a GPT Image 1.5 original (1024×1024). Empty if neither exists. |
-| `score` | real, nullable | Weighted critic score 0–1 |
-| `scores` | jsonb, nullable | `{ brand_voice, goal_fit, platform_fit, craft }` |
-| `critic_notes` | jsonb, nullable | `{ fix_list, gate_failures, rationale }` — not a flat string list |
-| `status` | text | `draft` \| `needs_human` \| `approved` \| `rejected` \| `published` |
-| `review_note` | text, nullable | Approver note on reject; fed into the next revision |
-| `scheduled_at` | timestamptz, nullable | |
-| `published_url` | text, nullable | |
-| `created_at` | timestamptz | |
-
-**Unique:** `(campaign_id, platform, version)`.
-
-Publish path composes `body` + `hashtags` in code (`composePost`); the DB never stores the merged string as the only representation.
-
-### `run_steps` — append-only agent audit / live timeline
-
-| Column | Type | Notes |
-| --- | --- | --- |
-| `id` | text PK (UUID) | |
-| `campaign_id` | text FK → campaigns, **ON DELETE CASCADE** | |
-| `step` | text | `plan` \| `strategy` \| `draft` \| `critique` \| `revise` \| `error` |
-| `model` | text | Model id that answered; `"-"` on error rows |
-| `output` | jsonb | Validated step payload, or `{ message }` on error |
-| `duration_ms` | integer | |
-| `created_at` | timestamptz | |
-
-**Index:** `(campaign_id, created_at)` for the campaign timeline.
-
-## Relationships
-
-```
-brand_profile          standalone (read by every agent)
-campaigns 1 ───< drafts      4 platforms × N versions
-campaigns 1 ───< run_steps   ordered audit trail
-```
-
-## Lifecycle
-
-```
-campaign:  queued → running → ready
-                          → needs_human
-                          → failed
-
-draft:     draft → approved → published
-                 → rejected  (+ review_note) → new version
-                 → needs_human → approved / rejected
-```
-
-Hard rule: agents never publish. Only `tools/social/*` after `status = 'approved'`.
-
-## Who reads / writes
-
-| Actor | Reads | Writes |
-| --- | --- | --- |
-| Brand UI | `brand_profile` | `brand_profile` |
-| Orchestrator (plan) | brand + brief | `campaigns.goal/plan`, `run_steps` |
-| Strategy | plan + brand card | `run_steps` only |
-| Platform writer | plan + strategy + brand | `drafts` (new version), `run_steps` |
-| Critic | drafts + plan + brand | `drafts.score/scores/critic_notes`, `run_steps` |
-| Human approval UI | latest drafts | `drafts.status`, `review_note`; edits → new version |
-| Publisher (code) | approved drafts | `status = published`, `published_url` |
-
-## Security
-
-1. Enable **Row Level Security** on all four tables with **no policies**.
-2. PostgREST (`anon` / `authenticated`) then sees nothing.
-3. The server’s direct Postgres role still works (RLS is not `FORCE`d).
-4. Do not expose `DATABASE_URL` or `SUPABASE_SERVICE_ROLE_KEY` to the browser.
-
-## Explicit non-goals (for now)
-
-- No `@supabase/supabase-js` until Auth / Realtime / Storage is needed.
-- No per-agent tables or schemas.
-- No `campaigns.strategy` column (use `run_steps`).
-- No multi-tenant / multi-brand rows yet — one brand profile per environment.
-- No performance / analytics tables yet.
-
-## Diff vs the earlier proposal draft
-
-| Proposal | Decision |
+| Table | Purpose and important constraints |
 | --- | --- |
-| `campaigns.goal` as jsonb Plan | **text** — store `plan.goal` only; full plan stays in `plan` |
-| `critic_notes` as vague jsonb | **structured** `{ fix_list, gate_failures, rationale }` |
-| `hashtags` / `review_note` “recommended” | **in schema now** — pipeline already emits hashtags; approval needs the note |
-| Unique + indexes listed | **in schema** |
-| Cascade deletes | **yes** |
-| RLS, no policies | **yes** (SQL migration) |
-| Body stores composed post | **no** — store body + hashtags separately |
+| `workspaces` | Team identity, unique slug and default timezone |
+| `workspace_members` | User membership and role; unique user, one workspace per user |
+| `workspace_invites` | Email-bound invitations, SHA-256 token hash, role, expiry and acceptance timestamp |
+| `brand_profile` | Company context, voice, examples, visual identity and guidelines; scoped by workspace |
+| `platform_connections` | Per-workspace LinkedIn OAuth credentials and expiry; unique workspace/platform |
+| `rate_limit_buckets` | Shared database-backed request limits |
+| `campaigns` | Brief, structured options, plan, goal, active run identity, brand snapshot, counters and summary |
+| `drafts` | Per-platform version history, copy/hashtags, image URL, critique, human review, schedule and publication state |
+| `run_steps` | Append-only agent timeline, model, phase, output and elapsed time |
+| `publications` | Durable attempts linking a draft and workspace to a provider and its outcome |
 
-Schema source of truth: `src/db/schema.ts`. Zod shapes: `src/shared/schemas.ts`.
+### Campaigns and generation
+
+`campaigns.options` is nullable JSONB for legacy compatibility. New inputs use
+`CampaignOptionsSchema`: selected platforms, creativity, research toggle/depth,
+length, brand-voice toggle and source mode. Missing legacy options use defaults.
+Source mode is context, not permission to fetch arbitrary URLs.
+
+`run_id` identifies the caller that atomically claimed a queued/stale campaign.
+Plan/snapshot writes, draft inserts, settlement and completion are fenced to that
+identity. Each new claim resets `llm_calls`; it counts provider attempts including
+retries/fallbacks. Finished summaries also distinguish `logical_calls` and
+`provider_attempts`; these fields are optional when reading older summaries.
+Strategy stays in `run_steps`, not a duplicated campaign column.
+
+Campaign states are `queued`, `running`, `ready`, `needs_human`, and `failed`.
+The worker recovers abandoned queued/running campaigns after five minutes using
+conditional updates against the observed identity and claim time. This recovery
+must not overwrite a newer run. Low-level stale claiming uses a 30-minute window.
+
+### Drafts and review
+
+A draft stores body and hashtags separately. Publishing composes them in plain
+code and applies the platform limits. Approval/scheduling validate the current
+copy too. Draft versions have a unique `(campaign_id, platform, version)` index.
+All version allocations serialize on the campaign row and use the actual maximum
+version plus one, including reruns and human edits.
+
+States: `draft`, `needs_human`, `approved`, `rejected`, `superseded`,
+`publishing`, `publish_failed`, and `published`.
+
+- Review/revision/publication transactions lock the campaign before the draft.
+  Human mutations wait until generation has finished.
+- Published and unresolved publication attempts cannot be edited, rejected,
+  revised or deleted. Scheduled drafts must be unscheduled before AI revision.
+- `revision_token` and `revision_started_at` reserve a human-note revision.
+  Claims expire after five minutes; stale completions cannot retire newer copy.
+- Edited approval/scheduling writes a new version and applies the human action
+  in one transaction. Edits/rejections retire any old schedule.
+- Current-version queries exclude `superseded` rows. Publication history is
+  preserved when later generation produces newer versions.
+- `scheduled_at` is timestamptz. API input must be a future timestamp; the worker
+  checks the exact observed schedule while claiming, preventing stale due-list
+  entries from publishing a cancelled or rescheduled post.
+- `schedule_attempts` tracks capped exponential preflight retries. After five
+  failures, human intervention is required.
+- `published_at` is the confirmed local completion/reconciliation time, not an
+  inferred creation date. Legacy published rows remain null; no time is invented.
+- Analytics reads all draft versions created/published in the maximum 90-day
+  window, not just current versions or a 200-row sample.
+
+### Publication ledger
+
+`publications` contains `draft_id`, `workspace_id`, `provider`, `status`,
+`external_url`, `error`, and creation/update timestamps. Its draft foreign key
+uses `ON DELETE RESTRICT` to retain evidence of external actions. The table has
+RLS and a `(draft_id, created_at)` index. Drafts have a `(status, scheduled_at)`
+index for due-list discovery.
+
+Providers are selected deterministically: LinkedIn for LinkedIn, Bluesky for
+X-format drafts. Instagram/Threads are export-only; Facebook remains disabled.
+The destination is shown in the UI and stored on the publication attempt.
+
+A claim transaction requires human approval, inserts a `claimed` attempt and
+moves the draft to `publishing` before any external write. Success updates the
+attempt to `succeeded` and the draft to `published`, recording URL and time.
+An ambiguous provider/database failure becomes `unknown` plus `publish_failed`.
+Abandoned claims older than ten minutes are recovered as unknown, never retried
+blindly. Owner/admin reconciliation records success with an actual platform URL,
+or marks the attempt failed and unlocks the approved draft for explicit retry.
+This prevents automatic duplicate attempts; it does not claim distributed
+exactly-once delivery or provider-side idempotency.
+
+### Invitations
+
+Owners/admins can create seven-day, single-use invitation links under
+Integrations. Only a token hash is stored; the raw link is returned once without
+caching. Acceptance requires an authenticated matching email and atomically
+creates membership and consumes the invite under a row lock. Recipients need an
+existing Auth account. This flow does not send email or provision accounts.
+
+## Migrations and operational verification
+
+1. Back up the database and persistent uploads; test against a database copy.
+2. Stop old scheduling workers for a schema-changing deployment.
+3. Run `npm run db:migrate` using a direct/session connection before starting
+   either the updated web process or the worker. Migration `0007` is additive;
+   pre-existing publications are not assigned fabricated timestamps.
+4. Run `npm run test:db` against a dedicated migrated test database. It creates
+   and cleans up isolated fixtures, exercising claims, version races, workspace
+   scope, schedules, publication recovery and invitation acceptance.
+5. Build and start both processes; verify one real approved/scheduled post on
+   each configured provider. Never run integration tests against production.
+
+Rollback is a coordinated application/database restore from a reviewed backup,
+not an automatic destructive down migration. Preserve publication evidence and
+reconcile external posts before replaying any work. The database suite and real
+provider checks require infrastructure; a successful compile is not proof that
+these operational checks have passed.

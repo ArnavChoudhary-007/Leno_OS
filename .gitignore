@@ -40,3 +40,5 @@ next-env.d.ts
 
 # uploaded campaign photos (fitted copies live here too)
 /uploads/
+/backups/
+/storage/

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
   BarChart3,
@@ -127,9 +127,13 @@ export function CommandPalette({
     );
   }, [items, query]);
 
-  useEffect(() => {
+  const run = useCallback((item: PaletteItem) => {
+    setOpen(false);
+    setQuery("");
     setSelected(0);
-  }, [query, open]);
+    item.action?.();
+    if (item.href) router.push(item.href);
+  }, [router]);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -137,6 +141,7 @@ export function CommandPalette({
         event.preventDefault();
         setOpen((value) => !value);
         setQuery("");
+        setSelected(0);
       }
       if (!open) return;
       if (event.key === "Escape") {
@@ -161,14 +166,7 @@ export function CommandPalette({
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, filtered, selected]);
-
-  function run(item: PaletteItem) {
-    setOpen(false);
-    setQuery("");
-    item.action?.();
-    if (item.href) router.push(item.href);
-  }
+  }, [open, filtered, selected, run]);
 
   const grouped = filtered.reduce<Record<string, PaletteItem[]>>((acc, item) => {
     acc[item.category] = acc[item.category] ?? [];
@@ -182,7 +180,7 @@ export function CommandPalette({
         type="button"
         className="command-trigger-btn"
         title="Open Command Center"
-        onClick={() => setOpen(true)}
+        onClick={() => { setOpen(true); setSelected(0); }}
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <circle cx="11" cy="11" r="8" />
@@ -210,7 +208,7 @@ export function CommandPalette({
                 autoFocus
                 value={query}
                 placeholder="Type a command, search posts, or jump to view..."
-                onChange={(e) => setQuery(e.target.value)}
+                onChange={(e) => { setQuery(e.target.value); setSelected(0); }}
               />
               <span className="kbd-badge">ESC</span>
             </div>

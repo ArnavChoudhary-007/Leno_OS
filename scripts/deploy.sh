@@ -26,11 +26,7 @@ echo "==> Building Next.js"
 npm run build
 
 echo "==> Starting / reloading PM2"
-if pm2 describe leno-os >/dev/null 2>&1; then
-  pm2 reload ecosystem.config.cjs --update-env
-else
-  pm2 start ecosystem.config.cjs
-fi
+pm2 startOrReload ecosystem.config.cjs --update-env
 pm2 save
 
 echo "==> Health check"

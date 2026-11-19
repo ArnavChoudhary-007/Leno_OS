@@ -5,12 +5,7 @@ import { redirect } from "next/navigation";
 import { createHash } from "node:crypto";
 import { createSupabaseServer, getSessionUser } from "@/auth/server";
 import { isPublicDemo } from "@/auth/public-demo";
-import {
-  addWorkspaceMember,
-  getInviteByTokenHash,
-  getMembershipByUserId,
-  markInviteAccepted,
-} from "@/db/queries/workspaces";
+import { acceptWorkspaceInvite } from "@/db/queries/workspaces";
 import { AppError } from "@/shared/errors";
 import { InviteAcceptSchema, SignInSchema } from "@/shared/schemas";
 import { consumeRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
@@ -89,32 +84,10 @@ export async function acceptInvite(
     return { ok: false, message: "Sign in first, then open the invite link again." };
   }
 
-  const existing = await getMembershipByUserId(user.id);
-  if (existing) {
-    return { ok: false, message: "You already belong to a workspace." };
-  }
-
-  const invite = await getInviteByTokenHash(hashToken(parsed.data.token));
-  if (!invite || invite.accepted_at) {
-    return { ok: false, message: "This invite link is invalid or already used." };
-  }
-  if (new Date(invite.expires_at).getTime() <= Date.now()) {
-    return { ok: false, message: "This invite has expired." };
-  }
-  if (
-    user.email &&
-    invite.email.toLowerCase() !== user.email.toLowerCase()
-  ) {
-    return { ok: false, message: "Sign in with the email this invite was sent to." };
-  }
-
   try {
-    await addWorkspaceMember({
-      workspaceId: invite.workspace_id,
-      userId: user.id,
-      role: invite.role === "owner" ? "admin" : invite.role,
-    });
-    await markInviteAccepted(invite.id);
+    if (isPublicDemo()) throw new AppError("forbidden", "Invitations are disabled in the public demo.");
+    await consumeRateLimit(RATE_LIMITS.authIp(ipFromHeaders(await headers())));
+    await acceptWorkspaceInvite(hashToken(parsed.data.token), user.id, user.email ?? null);
   } catch (err) {
     if (err instanceof AppError) {
       return { ok: false, message: err.message };

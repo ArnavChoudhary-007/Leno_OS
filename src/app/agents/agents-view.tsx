@@ -67,11 +67,11 @@ export function AgentsView({ agents }: { agents: AgentInfo[] }) {
             <div className="agent-card-stats">
               <div className="agent-stat-item">
                 <span className="agent-stat-num">{agent.tasksCompleted}</span>
-                <span className="agent-stat-name">Tasks Completed</span>
+                <span className="agent-stat-name">{agent.countLabel}</span>
               </div>
               <div className="agent-stat-item">
-                <span className="agent-stat-num">{agent.uptime}</span>
-                <span className="agent-stat-name">Health / Uptime</span>
+                <span className="agent-stat-num">{agent.availability}</span>
+                <span className="agent-stat-name">Availability (not uptime)</span>
               </div>
             </div>
             <div
