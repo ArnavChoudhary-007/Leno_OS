@@ -1,246 +1,186 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  BarChart3,
-  Bot,
-  FileText,
-  LayoutDashboard,
-  Link2,
-  Moon,
-  Palette,
-  PenLine,
-  Radio,
-} from "lucide-react";
+import type { PaletteEntry } from "@/components/app-chrome";
 
-type PaletteItem = {
-  href?: string;
-  label: string;
-  category: string;
-  icon: ReactNode;
-  action?: () => void;
-};
+type Command = PaletteEntry;
 
-function applyTheme(theme: "light" | "dark") {
-  document.documentElement.setAttribute("data-theme", theme);
-  document.documentElement.classList.toggle("dark", theme === "dark");
-  localStorage.setItem("leno-theme", theme);
-}
-
+/**
+ * Search or jump to: pages, actions, and the workspace's latest posts.
+ * ⌘K / Ctrl+K toggles it from anywhere.
+ */
 export function CommandPalette({
   canMutate,
   reviewCount,
+  posts,
 }: {
   canMutate: boolean;
   reviewCount: number;
+  posts: PaletteEntry[];
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [selected, setSelected] = useState(0);
+  const [cursor, setCursor] = useState(0);
+  const listRef = useRef<HTMLDivElement>(null);
 
-  const items = useMemo<PaletteItem[]>(() => {
-    const nav: PaletteItem[] = [
-      {
-        href: "/",
-        label: "Open Overview Dashboard",
-        category: "NAVIGATION",
-        icon: <LayoutDashboard size={15} />,
-      },
-      {
-        href: "/campaigns",
-        label: "Open Content Library",
-        category: "NAVIGATION",
-        icon: <FileText size={15} />,
-      },
-      {
-        href: "/track",
-        label: "Open Content Lifecycle Tracker",
-        category: "NAVIGATION",
-        icon: <Radio size={15} />,
-      },
-      {
-        href: "/analytics",
-        label: "View Performance Analytics",
-        category: "NAVIGATION",
-        icon: <BarChart3 size={15} />,
-      },
-      {
-        href: "/agents",
-        label: "Inspect Agent Orchestrator",
-        category: "AGENTS",
-        icon: <Bot size={15} />,
-      },
-      {
-        href: "/integrations",
-        label: "Manage Integrations",
-        category: "SETTINGS",
-        icon: <Link2 size={15} />,
-      },
-      {
-        href: "/brand",
-        label: "Edit brand card",
-        category: "SETTINGS",
-        icon: <Palette size={15} />,
-      },
-      {
-        label: "Toggle Dark / Light Mode",
-        category: "PREFERENCES",
-        icon: <Moon size={15} />,
-        action: () => {
-          const next =
-            document.documentElement.getAttribute("data-theme") === "dark"
-              ? "light"
-              : "dark";
-          applyTheme(next);
-        },
-      },
-    ];
-    const actions: PaletteItem[] = [];
-    if (canMutate) {
-      actions.push({
-        href: "/campaigns/new",
-        label: "Create new post",
-        category: "ACTIONS",
-        icon: <PenLine size={15} />,
-      });
-    }
+  const commands = useMemo<Command[]>(() => {
+    const list: Command[] = [];
+    if (canMutate) list.push({ label: "Write a new post", href: "/campaigns/new", kind: "Create" });
     if (reviewCount > 0) {
-      actions.push({
-        href: "/campaigns?status=Review",
-        label: `Review pending content (${reviewCount} waiting)`,
-        category: "ACTIONS",
-        icon: <Radio size={15} />,
+      list.push({
+        label: `Review ${reviewCount} post${reviewCount === 1 ? "" : "s"} waiting for approval`,
+        href: "/campaigns?status=Waiting",
+        kind: "Action",
       });
     }
-    return [...actions, ...nav];
-  }, [canMutate, reviewCount]);
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter(
-      (item) =>
-        item.label.toLowerCase().includes(q) ||
-        item.category.toLowerCase().includes(q),
+    list.push(
+      { label: "Go to Overview", href: "/", kind: "Page" },
+      { label: "Go to Content", href: "/campaigns", kind: "Page" },
+      { label: "Go to Track", href: "/track", kind: "Page" },
+      { label: "Go to Analytics", href: "/analytics", kind: "Page" },
+      { label: "Go to Agents", href: "/agents", kind: "Page" },
+      { label: "Connect a platform", href: "/integrations", kind: "Integrations" },
+      { label: "Edit the brand card", href: "/brand", kind: "Settings" },
+      { label: "How Leno works", href: "/help", kind: "Help" },
     );
-  }, [items, query]);
+    return [...list, ...posts];
+  }, [canMutate, reviewCount, posts]);
 
-  useEffect(() => {
-    setSelected(0);
-  }, [query, open]);
+  const results = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return commands.slice(0, 8);
+    const words = q.split(/\s+/);
+    return commands.filter((c) => {
+      const hay = `${c.label} ${c.kind}`.toLowerCase();
+      return words.every((w) => hay.includes(w));
+    });
+  }, [commands, query]);
+
+  const active = Math.min(cursor, Math.max(results.length - 1, 0));
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        setOpen((value) => !value);
         setQuery("");
-      }
-      if (!open) return;
-      if (event.key === "Escape") {
-        event.preventDefault();
-        setOpen(false);
-      }
-      if (event.key === "ArrowDown") {
-        event.preventDefault();
-        setSelected((i) => (filtered.length === 0 ? 0 : (i + 1) % filtered.length));
-      }
-      if (event.key === "ArrowUp") {
-        event.preventDefault();
-        setSelected((i) =>
-          filtered.length === 0 ? 0 : (i - 1 + filtered.length) % filtered.length,
-        );
-      }
-      if (event.key === "Enter") {
-        event.preventDefault();
-        const item = filtered[selected];
-        if (item) run(item);
+        setCursor(0);
+        setOpen((v) => !v);
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, filtered, selected]);
+  }, []);
 
-  function run(item: PaletteItem) {
+  useEffect(() => {
+    const el = listRef.current?.querySelector<HTMLElement>('[data-active="true"]');
+    el?.scrollIntoView({ block: "nearest" });
+  }, [active, open]);
+
+  function go(cmd: Command | undefined) {
+    if (!cmd) return;
     setOpen(false);
-    setQuery("");
-    item.action?.();
-    if (item.href) router.push(item.href);
+    router.push(cmd.href);
   }
 
-  const grouped = filtered.reduce<Record<string, PaletteItem[]>>((acc, item) => {
-    acc[item.category] = acc[item.category] ?? [];
-    acc[item.category].push(item);
-    return acc;
-  }, {});
+  function onInputKey(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      setOpen(false);
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setCursor(Math.min(active + 1, results.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setCursor(Math.max(active - 1, 0));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      go(results[active]);
+    }
+  }
 
   return (
     <>
       <button
         type="button"
-        className="command-trigger-btn"
-        title="Open Command Center"
-        onClick={() => setOpen(true)}
+        className="l-search-btn"
+        onClick={() => {
+          setQuery("");
+          setCursor(0);
+          setOpen(true);
+        }}
       >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <circle cx="11" cy="11" r="8" />
-          <line x1="21" y1="21" x2="16.65" y2="16.65" />
+        <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+          <circle cx="7" cy="7" r="4.5" />
+          <path d="M10.5 10.5L14 14" />
         </svg>
-        <span className="kbd-badge">⌘K</span>
-        <span>Search or command</span>
+        <span className="l-search-label">Search or jump to</span>
+        <kbd className="l-kbd">⌘K</kbd>
       </button>
       {open ? (
-        <div
-          className="modal-backdrop open"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Command palette"
-          onClick={() => setOpen(false)}
-        >
-          <div className="cmd-palette-wrapper" onClick={(e) => e.stopPropagation()}>
-            <div className="cmd-input-container">
-              <svg className="cmd-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="11" cy="11" r="8" />
-                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+        <div className="l-palette-backdrop">
+          <button
+            type="button"
+            aria-label="Close search"
+            onClick={() => setOpen(false)}
+            style={{ position: "absolute", inset: 0, border: 0, background: "transparent", cursor: "default" }}
+          />
+          <div role="dialog" aria-modal="true" aria-label="Search and commands" className="l-palette">
+            <label htmlFor="leno-cmd" className="sr-only-l">
+              Search commands and posts
+            </label>
+            <div className="l-palette-input-row">
+              <svg aria-hidden="true" width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+                <circle cx="7" cy="7" r="4.5" />
+                <path d="M10.5 10.5L14 14" />
               </svg>
               <input
-                className="cmd-input"
+                id="leno-cmd"
+                className="l-palette-input"
                 autoFocus
+                autoComplete="off"
                 value={query}
-                placeholder="Type a command, search posts, or jump to view..."
-                onChange={(e) => setQuery(e.target.value)}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setCursor(0);
+                }}
+                onKeyDown={onInputKey}
+                placeholder="Type a command or a post title"
+                role="combobox"
+                aria-expanded="true"
+                aria-controls="leno-cmd-list"
+                aria-activedescendant={results.length ? `leno-cmd-${active}` : undefined}
               />
-              <span className="kbd-badge">ESC</span>
+              <kbd className="l-kbd">esc</kbd>
             </div>
-            <div className="cmd-results-list">
-              {filtered.length === 0 ? (
-                <p className="cmd-category-header">No matches</p>
-              ) : (
-                Object.entries(grouped).map(([category, group]) => (
-                  <div key={category}>
-                    <p className="cmd-category-header">{category}</p>
-                    {group.map((item) => {
-                      const index = filtered.indexOf(item);
-                      return (
-                        <button
-                          key={item.label}
-                          type="button"
-                          className={`cmd-item${index === selected ? " selected" : ""}`}
-                          onMouseEnter={() => setSelected(index)}
-                          onClick={() => run(item)}
-                        >
-                          <span className="cmd-item-left">
-                            {item.icon}
-                            {item.label}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                ))
-              )}
+            <div className="l-palette-list" id="leno-cmd-list" role="listbox" ref={listRef}>
+              {results.map((r, i) => (
+                <button
+                  key={`${i}-${r.href}`}
+                  id={`leno-cmd-${i}`}
+                  type="button"
+                  role="option"
+                  aria-selected={i === active}
+                  data-active={i === active}
+                  className={`l-palette-item${i === active ? " is-active" : ""}`}
+                  onMouseEnter={() => setCursor(i)}
+                  onClick={() => go(r)}
+                >
+                  <span className="l-palette-item-label">{r.label}</span>
+                  <span className="l-palette-kind">{r.kind}</span>
+                </button>
+              ))}
+              {results.length === 0 ? (
+                <p style={{ margin: 0, padding: "24px 12px", color: "var(--l-text-3)", fontSize: 15 }}>
+                  Nothing matches that
+                </p>
+              ) : null}
+            </div>
+            <div className="l-palette-foot">
+              <span>↑ ↓ to move</span>
+              <span>Enter to open</span>
+              <span>Esc to close</span>
             </div>
           </div>
         </div>

@@ -1,740 +1,631 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Drawer } from "@/components/leno/drawer";
+import { PLATFORM_PLAYBOOKS, composePost } from "@/agents/platforms";
+import { ArrowIcon } from "@/components/app-chrome";
 import { EditorDrawer, type EditorDraft } from "@/components/leno/editor-drawer";
-import { PlatformPill } from "@/components/leno/platform-pill";
 import { apiErrorMessage } from "@/lib/api-error";
 import { reviewDraftOrThrow } from "@/lib/review-draft";
-import { platformLabel } from "@/lib/workspace-ui";
+import { CREATE_PLATFORMS, platformLabel } from "@/lib/workspace-ui";
 import type { CampaignStatus, PlatformId } from "@/shared/types";
 
-const SAMPLE =
-  "Why most companies don't have a content problem.\nThey have a distribution problem.";
+const TONES = ["Confident", "Friendly", "Expert", "Playful"] as const;
 
-const PIPELINE = [
-  {
-    title: "Understanding your idea",
-    sub: "Extracting core premises, hook opportunities, and positioning",
-    steps: ["plan"],
-  },
-  {
-    title: "Researching",
-    sub: "Analyzing industry references and benchmark patterns",
-    steps: ["plan"],
-  },
-  {
-    title: "Building content strategy",
-    sub: "Structuring narrative arc and high-retention frameworks",
-    steps: ["strategy"],
-  },
-  {
-    title: "Adapting for platforms",
-    sub: "Generating native long-form, carousel briefs, and thread hooks",
-    steps: ["draft"],
-  },
-  {
-    title: "Generating the image",
-    sub: "GPT Image 1.5 at 1024×1024, then cropped per platform",
-    steps: ["image"],
-  },
-  {
-    title: "Quality checking",
-    sub: "Validating critic scorecards and brand tone consistency",
-    steps: ["critique", "revise"],
-  },
+/** What each platform's card promises before anything is written. */
+const FORMAT: Record<PlatformId, string> = {
+  linkedin: "Up to 3,000 characters",
+  x: "Up to 280 characters",
+  instagram: "Caption and feed image",
+  threads: "Up to 500 characters",
+  facebook: "Page post",
+};
+
+const LIMIT_WORD: Record<PlatformId, string> = {
+  linkedin: "3,000 character limit",
+  x: "280 character limit",
+  instagram: "caption length and hashtag count",
+  threads: "500 character limit",
+  facebook: "Page post rules",
+};
+
+/** The seven bars under the form, and which run steps fill them. */
+const STAGES = [
+  { label: "Understand brief", steps: ["load_context"] },
+  { label: "Plan", steps: ["plan", "strategy"] },
+  { label: "Research", steps: ["research"] },
+  { label: "Draft", steps: ["roster", "draft"] },
+  { label: "Image", steps: ["image"] },
+  { label: "Quality check", steps: ["critique", "revise"] },
+  { label: "Ready for review", steps: ["summary"] },
 ] as const;
 
-const PLATFORMS: {
-  id: PlatformId;
-  spec: string;
-  variant: string;
-  preview: string;
-  color: string;
-}[] = [
-  {
-    id: "linkedin",
-    spec: "Professional post",
-    variant: "Long-form",
-    preview: "Produces a 1,200 char narrative + structural framework",
-    color: "#0A66C2",
-  },
-  {
-    id: "instagram",
-    spec: "Carousel + caption",
-    variant: "Visual slides",
-    preview: "Produces a slide breakdown + visual copy + caption",
-    color: "#E1306C",
-  },
-  {
-    id: "x",
-    spec: "Short-form",
-    variant: "Hook + thread",
-    preview: "Produces a hook tweet + connected insight posts",
-    color: "#000000",
-  },
-  {
-    id: "threads",
-    spec: "Conversational",
-    variant: "Reply-native",
-    preview: "Produces a casual take that invites replies",
-    color: "#1c1c1c",
-  },
-];
+const TERMINAL: CampaignStatus[] = ["ready", "needs_human", "failed"];
 
-type Source = "idea" | "source" | "campaign" | "repurpose";
+type RunDraft = EditorDraft & { version: number };
+
+type RunPayload = {
+  campaign: { id: string; status: CampaignStatus; plan: { platforms: PlatformId[] } | null };
+  steps: { step: string }[];
+  drafts: RunDraft[];
+};
 
 export function BriefForm({
   brandName,
-  toneWords,
-  audience,
+  hasBrand,
 }: {
-  brandName?: string | null;
-  toneWords?: string[];
-  audience?: string | null;
+  brandName: string | null;
+  hasBrand: boolean;
 }) {
-  const [source, setSource] = useState<Source>("idea");
-  const [idea, setIdea] = useState(SAMPLE);
-  const [topic, setTopic] = useState("Distribution");
-  const [topics, setTopics] = useState(["AI Architecture", "Sub-Agents", "Distribution"]);
-  const [selectedAudience, setSelectedAudience] = useState(
-    audience?.split(/[,.]/)[0]?.trim() || "Founders",
-  );
-  const [audiences, setAudiences] = useState(
-    audience
-      ? [audience.split(/[,.]/)[0]?.trim() || audience, "Founders", "Marketers"].filter(
-          (v, i, arr) => v && arr.indexOf(v) === i,
-        )
-      : ["Founders", "Marketers", "Engineers"],
-  );
-  const [goal, setGoal] = useState("Awareness");
-  const [goals, setGoals] = useState(["Awareness", "Engagement", "Leads"]);
-  const [tone, setTone] = useState(toneWords?.[0] ?? "Professional");
-  const [tones, setTones] = useState(
-    toneWords && toneWords.length > 0 ? toneWords : ["Professional", "Conversational", "Bold"],
-  );
-  const [format, setFormat] = useState("Educational");
-  const [platforms, setPlatforms] = useState<PlatformId[]>(["linkedin", "instagram", "x"]);
-  const [research, setResearch] = useState("standard");
-  const [creativity, setCreativity] = useState(0.7);
-  const [length, setLength] = useState("medium");
-  const [includeResearch, setIncludeResearch] = useState(true);
-  const [brandVoice, setBrandVoice] = useState(true);
+  const [idea, setIdea] = useState("");
+  const [audience, setAudience] = useState("");
+  const [tone, setTone] = useState<(typeof TONES)[number]>("Confident");
+  const [showMore, setShowMore] = useState(false);
   const [image, setImage] = useState<File | null>(null);
-  const [strategyOpen, setStrategyOpen] = useState(false);
-  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [on, setOn] = useState<Record<string, boolean>>({
+    linkedin: true,
+    x: true,
+    instagram: true,
+    threads: true,
+  });
+
+  const [submitting, setSubmitting] = useState(false);
   const [campaignId, setCampaignId] = useState<string | null>(null);
-  const [status, setStatus] = useState<CampaignStatus | null>(null);
-  const [lastStep, setLastStep] = useState<string | null>(null);
-  const [drafts, setDrafts] = useState<EditorDraft[]>([]);
-  const [editing, setEditing] = useState<EditorDraft | null>(null);
+  const [requested, setRequested] = useState<PlatformId[]>([]);
+  const [run, setRun] = useState<RunPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
+  const [editing, setEditing] = useState<string | null>(null);
+  const [copied, setCopied] = useState<Record<string, boolean>>({});
+  const [approving, setApproving] = useState<Record<string, boolean>>({});
+  const [tick, setTick] = useState(0);
+  const postsRef = useRef<HTMLElement>(null);
 
-  const words = idea.trim() ? idea.trim().split(/\s+/).length : 0;
-  const generating = Boolean(campaignId) && status !== "ready" && status !== "needs_human" && status !== "failed";
-  const done = status === "ready" || status === "needs_human";
+  const status = run?.campaign.status ?? (campaignId ? "queued" : null);
+  const busy = submitting || (campaignId !== null && status !== null && !TERMINAL.includes(status));
+  const finished = status === "ready" || status === "needs_human";
+  const failed = status === "failed";
 
-  const stepIndex = useMemo(() => {
-    if (!lastStep) return generating ? 0 : -1;
-    const idx = PIPELINE.findIndex((s) => s.steps.includes(lastStep as never));
-    if (lastStep === "error") return PIPELINE.length - 1;
-    return idx < 0 ? 0 : idx;
-  }, [lastStep, generating]);
+  const load = useCallback(async (id: string) => {
+    const res = await fetch(`/api/campaigns/${id}`, { cache: "no-store" });
+    if (!res.ok) return;
+    setRun((await res.json()) as RunPayload);
+  }, []);
 
+  // Poll the live run until it lands; tick drives the rotating messages.
   useEffect(() => {
-    if (!campaignId || done || status === "failed") return;
-    const id = window.setInterval(async () => {
-      const res = await fetch(`/api/campaigns/${campaignId}`, { cache: "no-store" });
-      if (!res.ok) return;
-      const json = (await res.json()) as {
-        campaign: { status: CampaignStatus };
-        steps: { step: string }[];
-        drafts: EditorDraft[];
-      };
-      setStatus(json.campaign.status);
-      setLastStep(json.steps[json.steps.length - 1]?.step ?? null);
-      setDrafts(json.drafts ?? []);
-    }, 1000);
-    return () => window.clearInterval(id);
-  }, [campaignId, done, status]);
+    if (!campaignId || !busy) return;
+    const poll = window.setInterval(() => void load(campaignId), 1200);
+    const ticker = window.setInterval(() => setTick((t) => t + 1), 1400);
+    return () => {
+      window.clearInterval(poll);
+      window.clearInterval(ticker);
+    };
+  }, [campaignId, busy, load]);
 
-  function togglePlatform(id: PlatformId) {
-    setPlatforms((prev) => {
-      if (prev.includes(id)) {
-        if (prev.length === 1) {
-          toast.error("At least one platform must be selected");
-          return prev;
-        }
-        return prev.filter((p) => p !== id);
-      }
-      return [...prev, id];
-    });
-  }
+  // Toast once when the run finishes.
+  const lastStatus = useRef<CampaignStatus | null>(null);
+  useEffect(() => {
+    if (!status || lastStatus.current === status) return;
+    const prev = lastStatus.current;
+    lastStatus.current = status;
+    if (!prev) return;
+    if (status === "ready") toast.success("Your posts are ready for review");
+    if (status === "needs_human") toast("Posts are ready — some need a closer look");
+    if (status === "failed") toast.error("The run stopped before finishing");
+  }, [status]);
 
-  function addChip(list: string[], setList: (v: string[]) => void, setActive: (v: string) => void, label: string) {
-    const value = window.prompt(label)?.trim();
-    if (!value) return;
-    setList([...list, value]);
-    setActive(value);
+  const selected = CREATE_PLATFORMS.filter((p) => on[p]);
+  const shown: PlatformId[] = campaignId ? requested : selected;
+
+  const draftsByPlatform = useMemo(() => {
+    const map = new Map<string, RunDraft>();
+    for (const d of run?.drafts ?? []) map.set(d.platform, d);
+    return map;
+  }, [run]);
+
+  const stageIndex = useMemo(() => {
+    if (finished) return STAGES.length;
+    let reached = -1;
+    for (const step of run?.steps ?? []) {
+      const idx = STAGES.findIndex((s) => (s.steps as readonly string[]).includes(step.step));
+      if (idx > reached) reached = idx;
+    }
+    return reached;
+  }, [run, finished]);
+
+  function toggle(id: PlatformId) {
+    if (busy) return;
+    setOn((prev) => ({ ...prev, [id]: !prev[id] }));
   }
 
   function composeBrief(): string {
-    const extra = [
-      idea.trim(),
-      "",
-      `Topic: ${topic}. Audience: ${selectedAudience}. Goal: ${goal}. Tone: ${tone}. Format: ${format}.`,
-      `Write only for: ${platforms.map(platformLabel).join(", ")}.`,
-      `Length: ${length}. Creativity: ${creativity}. Research: ${research}${includeResearch ? " with citations where useful" : ""}.`,
-      brandVoice ? "Stay strictly on brand voice." : "",
-      source !== "idea" ? `Creation mode: ${source}.` : "",
-    ]
-      .filter(Boolean)
-      .join("\n");
-    return extra.slice(0, 2000);
+    const lines = [idea.trim()];
+    if (audience.trim()) lines.push("", `Audience: ${audience.trim()}`);
+    if (showMore || tone !== "Confident") lines.push(`Tone: ${tone}`);
+    return lines.join("\n");
   }
 
-  function generate() {
+  async function start(e?: FormEvent) {
+    e?.preventDefault();
+    if (busy) return;
     setError(null);
-    startTransition(async () => {
+    if (selected.length === 0) {
+      toast.error("Pick at least one platform");
+      return;
+    }
+    if (idea.trim().length < 20) {
+      setError("Give Leno a little more to go on: at least 20 characters.");
+      document.getElementById("idea")?.focus();
+      return;
+    }
+    setSubmitting(true);
+    try {
       const body = new FormData();
       body.set("brief", composeBrief());
+      for (const p of selected) body.append("platforms", p);
       if (image) body.set("image", image);
       const res = await fetch("/api/campaigns", { method: "POST", body });
       const data: unknown = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const message = apiErrorMessage(data, `Request failed (${res.status})`);
-        setError(message);
-        toast.error(message);
+        setError(apiErrorMessage(data, `Request failed (${res.status})`));
         return;
       }
       if (data && typeof data === "object" && "id" in data && typeof data.id === "string") {
+        lastStatus.current = null;
+        setRun(null);
+        setCopied({});
+        setRequested(selected);
         setCampaignId(data.id);
-        setStatus("queued");
-        setDrafts([]);
-        toast.success("Orchestrator started");
-        return;
+        void load(data.id);
+        window.setTimeout(() => postsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 400);
       }
-      setError("Unexpected response");
-    });
+    } catch {
+      setError("Could not reach the server. Check your connection and try again.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
-  function approveAll() {
-    startTransition(async () => {
-      try {
-        for (const draft of drafts) {
-          if (draft.status === "published") continue;
-          await reviewDraftOrThrow(draft.campaign_id, draft.id, { action: "approve" });
-        }
-        toast.success("Approved all drafts");
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Approve failed");
-      }
-    });
+  async function retry() {
+    if (!campaignId) return;
+    const res = await fetch(`/api/campaigns/${campaignId}`, { method: "POST" });
+    const data: unknown = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      toast.error(apiErrorMessage(data, `Retry failed (${res.status})`));
+      return;
+    }
+    lastStatus.current = "queued";
+    toast.success("Running it again");
+    void load(campaignId);
   }
 
-  const placeholder =
-    source === "source"
-      ? "Paste a whitepaper link, raw notes, or article excerpt..."
-      : source === "campaign"
-        ? "Define a multi-day campaign arc..."
-        : source === "repurpose"
-          ? "Paste a high-performing past post or URL to adapt..."
-          : "Describe the idea in a few words...";
+  async function approve(draft: RunDraft) {
+    setApproving((a) => ({ ...a, [draft.id]: true }));
+    try {
+      await reviewDraftOrThrow(draft.campaign_id, draft.id, { action: "approve" });
+      toast.success(`${platformLabel(draft.platform)} post approved and moved to Track`);
+      if (campaignId) await load(campaignId);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Approve failed");
+    } finally {
+      setApproving((a) => ({ ...a, [draft.id]: false }));
+    }
+  }
+
+  async function approveAll() {
+    const pending = (run?.drafts ?? []).filter((d) => d.status === "draft" || d.status === "needs_human");
+    if (pending.length === 0) return;
+    try {
+      for (const d of pending) {
+        await reviewDraftOrThrow(d.campaign_id, d.id, { action: "approve" });
+      }
+      toast.success(`${pending.length} post${pending.length === 1 ? "" : "s"} approved and moved to Track`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Approve failed");
+    }
+    if (campaignId) await load(campaignId);
+  }
+
+  async function copy(draft: RunDraft) {
+    try {
+      await navigator.clipboard.writeText(composePost({ platform: draft.platform as PlatformId, body: draft.body, hashtags: draft.hashtags }));
+      setCopied((c) => ({ ...c, [draft.id]: true }));
+      window.setTimeout(() => setCopied((c) => ({ ...c, [draft.id]: false })), 1600);
+    } catch {
+      toast.error("Could not copy");
+    }
+  }
+
+  const drafts = run?.drafts ?? [];
+  const approvedCount = drafts.filter((d) => d.status === "approved" || d.status === "published").length;
+  const waitingCount = drafts.filter((d) => d.status === "draft" || d.status === "needs_human").length;
+
+  let statusLine = "Pick your platforms and write the idea above";
+  if (busy) {
+    const ready = shown.filter((p) => draftsByPlatform.has(p)).length;
+    statusLine = ready > 0 ? `${ready} of ${shown.length} drafted, the critic is checking them` : `Writing ${shown.length} posts, one per platform`;
+  } else if (finished) {
+    statusLine =
+      approvedCount === drafts.length && drafts.length > 0
+        ? "All approved. They’re in Track, ready to schedule or publish"
+        : `${drafts.length} post${drafts.length === 1 ? "" : "s"} ready. Read them, edit anything, then approve`;
+  } else if (failed) {
+    statusLine = "The run stopped before it finished";
+  }
+
+  const editorDrafts = drafts.filter((d) => shown.includes(d.platform as PlatformId));
 
   return (
-    <div className="create-container">
-      <div className="create-cockpit-header">
-        <h1 className="create-cockpit-title">Create content</h1>
-        <p className="create-cockpit-subtitle">Turn an idea into platform-ready content.</p>
-      </div>
-
-      <div className="creation-type-section">
-        <span className="section-micro-label">Start with</span>
-        <div className="creation-type-row" role="radiogroup">
-          {(
-            [
-              ["idea", "Idea", "Start from a thought"],
-              ["source", "Source", "Turn existing material into content"],
-              ["campaign", "Campaign", "Build a multi-post narrative"],
-              ["repurpose", "Repurpose", "Adapt existing content"],
-            ] as const
-          ).map(([id, name, hint]) => (
-            <button
-              key={id}
-              type="button"
-              className={`creation-type-pill${source === id ? " active" : ""}`}
-              onClick={() => setSource(id)}
-            >
-              <span className="creation-type-texts">
-                <span className="creation-type-name">{name}</span>
-                <span className="creation-type-hint">{hint}</span>
-              </span>
-              <span className="creation-type-dot" />
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="create-cockpit-grid" id="createCockpitWorkspace" style={generating ? { opacity: 0.5 } : undefined}>
-        <aside className="cockpit-col cockpit-context-col">
-          <div className="cockpit-panel-header">
-            <span className="cockpit-panel-title">Context</span>
+    <>
+      <section className="l-create-hero">
+        <div className="l-create-hero-top">
+          <SayItOnce />
+          <div className="l-create-lede">
+            <p>
+              Tell Leno what your customers should hear, and it writes a native post for each platform
+              you pick, checked against that platform’s rules
+            </p>
+            <p className="l-create-lede-strong">
+              Nothing goes live until <span className="l-lime">you approve it</span>
+            </p>
           </div>
-          <ChipGroup
-            label="Topic"
-            values={topics}
-            active={topic}
-            onSelect={setTopic}
-            onAdd={() => addChip(topics, setTopics, setTopic, "Enter topic")}
-          />
-          <ChipGroup
-            label="Audience"
-            values={audiences}
-            active={selectedAudience}
-            onSelect={setSelectedAudience}
-            onAdd={() => addChip(audiences, setAudiences, setSelectedAudience, "Enter audience")}
-          />
-          <ChipGroup
-            label="Goal"
-            values={goals}
-            active={goal}
-            onSelect={setGoal}
-            onAdd={() => addChip(goals, setGoals, setGoal, "Enter goal")}
-          />
-          <ChipGroup
-            label="Tone"
-            values={tones}
-            active={tone}
-            onSelect={setTone}
-            onAdd={() => addChip(tones, setTones, setTone, "Enter tone")}
-          />
-          {brandName ? (
-            <div className="context-group">
-              <p className="context-group-label">Brand</p>
-              <span className="context-chip active">{brandName}</span>
+        </div>
+
+        {!hasBrand ? (
+          <div className="l-notice" role="note">
+            <span className="l-notice-pill">1</span>
+            <span className="l-notice-text">
+              Leno writes in your brand’s voice, so it needs a brand card first
+            </span>
+            <Link href="/brand" className="l-btn l-btn-outline">
+              Set up the brand card
+            </Link>
+          </div>
+        ) : null}
+
+        <form onSubmit={start} className="l-idea" aria-busy={busy}>
+          <div className="l-idea-main">
+            <label htmlFor="idea" className="l-idea-label">
+              What do you want to tell your customers?
+            </label>
+            <textarea
+              id="idea"
+              rows={2}
+              value={idea}
+              maxLength={1800}
+              onChange={(e) => {
+                setIdea(e.target.value);
+                if (error) setError(null);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void start();
+              }}
+              placeholder="Most AI prototypes never reach production, and it isn't the model's fault"
+              className="l-idea-input"
+              aria-describedby={error ? "idea-error" : undefined}
+              aria-invalid={error ? true : undefined}
+              disabled={busy}
+            />
+          </div>
+
+          {showMore ? (
+            <div className="l-idea-more l-reveal">
+              <div className="l-field">
+                <label htmlFor="aud" className="l-label">
+                  Who is it for
+                </label>
+                <input
+                  id="aud"
+                  className="l-input l-input-deep"
+                  value={audience}
+                  maxLength={160}
+                  onChange={(e) => setAudience(e.target.value)}
+                  placeholder="Founders and engineering leads"
+                  disabled={busy}
+                />
+              </div>
+              <div className="l-field">
+                <label htmlFor="tone" className="l-label">
+                  Tone
+                </label>
+                <select
+                  id="tone"
+                  className="l-input l-input-deep"
+                  value={tone}
+                  onChange={(e) => setTone(e.target.value as (typeof TONES)[number])}
+                  disabled={busy}
+                >
+                  {TONES.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="l-field">
+                <label htmlFor="photo" className="l-label">
+                  Your own photo (optional)
+                </label>
+                <input
+                  id="photo"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="l-file"
+                  onChange={(e) => setImage(e.target.files?.[0] ?? null)}
+                  disabled={busy}
+                />
+              </div>
             </div>
           ) : null}
-        </aside>
 
-        <main className="cockpit-col cockpit-canvas-col">
-          <div className="canvas-header">
-            <div className="canvas-title-wrap">
-              <span className="cockpit-panel-title">Your idea</span>
-              <span className="canvas-caption">What do you want to say?</span>
-            </div>
+          <div className="l-idea-foot">
+            <fieldset className="l-chips">
+              <legend className="l-chips-legend">Post to</legend>
+              {CREATE_PLATFORMS.map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  className="l-chip"
+                  aria-pressed={!!on[p]}
+                  onClick={() => toggle(p)}
+                  disabled={busy}
+                >
+                  {platformLabel(p)}
+                </button>
+              ))}
+            </fieldset>
             <button
               type="button"
-              className="btn-enhance-ai"
-              onClick={() => {
-                if (!idea.trim()) {
-                  toast.error("Write a few words first");
-                  return;
-                }
-                setIdea(
-                  `The single biggest bottleneck isn't more posts — it's un-orchestrated distribution.\n\n${idea.trim()}\n\nSpecialist agents with typed contracts beat a single prompt chain.`,
-                );
-                toast.success("Idea sharpened");
-              }}
+              className="l-more-btn"
+              aria-expanded={showMore}
+              onClick={() => setShowMore((v) => !v)}
             >
-              Enhance with AI
+              {showMore ? "Hide audience and tone" : "Add audience and tone"}
+            </button>
+            <button type="submit" className="l-cta l-idea-go" disabled={busy || !hasBrand}>
+              <span>{busy ? "Writing" : finished ? "Write again" : "Write the posts"}</span>
+              <ArrowIcon />
             </button>
           </div>
-          <div className="canvas-writing-surface">
-            <textarea
-              className="canvas-textarea"
-              rows={6}
-              value={idea}
-              placeholder={placeholder}
-              onChange={(e) => setIdea(e.target.value)}
-              maxLength={1600}
-              disabled={pending || generating}
-            />
-            <div className="canvas-footer-stats">
-              <span className="canvas-word-count">{words} words</span>
-            </div>
-          </div>
-          <div className="ai-suggestions-bar">
-            <span className="suggestions-label">AI suggestions</span>
-            <div className="suggestions-chips">
-              <button
-                type="button"
-                className="suggestion-chip"
-                onClick={() => {
-                  setIdea(`The distribution layer is the product.\n\n${idea}`);
-                  toast.message("Added a hook");
-                }}
-              >
-                Add a hook
-              </button>
-              <button
-                type="button"
-                className="suggestion-chip"
-                onClick={() => {
-                  setIdea(idea.replace(/\bvery\b/gi, "").replace(/\breally\b/gi, "").replace(/  +/g, " ").trim());
-                  toast.message("Tightened the copy");
-                }}
-              >
-                Make it sharper
-              </button>
-              <button
-                type="button"
-                className="suggestion-chip"
-                onClick={() => {
-                  if (!idea.includes("Contrarian")) {
-                    setIdea(
-                      `${idea}\n\nContrarian angle: the future of distribution isn't writing more posts — it's deploying specialist agents with verification contracts.`,
-                    );
-                  }
-                  toast.message("Added a contrarian angle");
-                }}
-              >
-                Add a contrarian angle
-              </button>
-            </div>
-          </div>
-        </main>
+          {busy ? <div className="l-rainline" aria-hidden="true" /> : null}
+        </form>
 
-        <aside className="cockpit-col cockpit-distribute-col">
-          <div className="cockpit-panel-header">
-            <span className="cockpit-panel-title">Distribute to</span>
-            <span className="cockpit-panel-meta">{platforms.length} selected</span>
-          </div>
-          <div className="distribution-cards-list">
-            {PLATFORMS.map((item) => {
-              const selected = platforms.includes(item.id);
+        {error ? (
+          <p id="idea-error" role="alert" className="l-form-error">
+            {error}
+            {error.toLowerCase().includes("brand") ? (
+              <>
+                {" "}
+                <Link href="/brand" className="l-link-lime">
+                  Open Settings
+                </Link>
+              </>
+            ) : null}
+          </p>
+        ) : null}
+
+        {campaignId ? (
+          <ol aria-label="Pipeline" className="l-stages">
+            {STAGES.map((s, i) => {
+              const done = finished || i < stageIndex;
+              const live = busy && i === Math.max(stageIndex, 0) && !done;
+              const broke = failed && i === Math.max(stageIndex, 0);
               return (
-                <button
-                  type="button"
-                  key={item.id}
-                  className={`platform-module-card${selected ? " selected" : ""}`}
-                  onClick={() => togglePlatform(item.id)}
-                >
-                  <div className="platform-module-top">
-                    <div className="platform-module-identity">
-                      <span
-                        style={{
-                          width: 18,
-                          height: 18,
-                          borderRadius: 4,
-                          background: item.color,
-                          display: "inline-block",
-                        }}
-                      />
-                      <span className="platform-module-name">{platformLabel(item.id)}</span>
+                <li key={s.label} className={`l-stage${done ? " is-done" : ""}${live ? " is-live" : ""}${broke ? " is-failed" : ""}`}>
+                  <span aria-hidden="true" className="l-stage-bar" />
+                  <span className="l-stage-label">
+                    {s.label}
+                    {live ? <span className="sr-only-l"> (in progress)</span> : null}
+                  </span>
+                </li>
+              );
+            })}
+          </ol>
+        ) : null}
+      </section>
+
+      <section id="posts" ref={postsRef} aria-labelledby="posts-h" className="l-posts">
+        <div className="l-posts-head">
+          <h2 id="posts-h" className="l-h2">
+            Your posts
+          </h2>
+          <p aria-live="polite" className="l-posts-status">
+            {statusLine}
+          </p>
+          {finished && waitingCount > 0 ? (
+            <button type="button" className="l-btn l-btn-outline" onClick={() => void approveAll()}>
+              Approve all {waitingCount}
+            </button>
+          ) : null}
+          {finished && waitingCount === 0 && drafts.length > 0 ? (
+            <Link href="/track" className="l-btn l-btn-outline">
+              Open Track
+            </Link>
+          ) : null}
+          {failed ? (
+            <button type="button" className="l-btn l-btn-outline" onClick={() => void retry()}>
+              Try again
+            </button>
+          ) : null}
+          {campaignId ? (
+            <Link href={`/campaigns/${campaignId}`} className="l-link">
+              Full run details
+            </Link>
+          ) : null}
+        </div>
+
+        {shown.length === 0 ? (
+          <p className="l-muted">Pick at least one platform above.</p>
+        ) : (
+          <div className="l-post-grid">
+            {shown.map((p, i) => {
+              const draft = draftsByPlatform.get(p);
+              const name = platformLabel(p);
+              const state: "empty" | "loading" | "ready" | "missing" = !campaignId
+                ? "empty"
+                : draft && !busy
+                  ? "ready"
+                  : busy
+                    ? "loading"
+                    : "missing";
+              if (state === "empty") {
+                return (
+                  <article key={p} className="l-post is-empty">
+                    <PostHeader name={name} fmt={FORMAT[p]} />
+                    <div className="l-post-empty">
+                      <span aria-hidden="true" style={{ width: "82%" }} />
+                      <span aria-hidden="true" style={{ width: "64%" }} />
+                      <span aria-hidden="true" style={{ width: "74%" }} />
+                      <p>Your {name} draft lands here</p>
                     </div>
-                    <span className="platform-module-toggle">
-                      <span className="toggle-dot" />
-                      <span className="toggle-text">{selected ? "Selected" : "Off"}</span>
-                    </span>
+                  </article>
+                );
+              }
+              if (state === "loading") {
+                const msgs = loadingMessages(p, run?.steps.at(-1)?.step);
+                return (
+                  <article key={p} className="l-post" aria-busy="true">
+                    <PostHeader name={name} fmt={FORMAT[p]} />
+                    <div className="l-rb" aria-hidden="true">
+                      <div className="l-rb-spin" />
+                      <div className="l-rb-blobs" />
+                      <div className="l-rb-sweep" />
+                      <div className="l-rb-grain" />
+                      <div className="l-rb-lines">
+                        <div className="l-sk" style={{ width: "86%" }} />
+                        <div className="l-sk" style={{ width: "64%" }} />
+                        <div className="l-sk" style={{ width: "78%" }} />
+                        <div className="l-sk" style={{ width: "40%" }} />
+                      </div>
+                    </div>
+                    <p className="l-post-msg">
+                      <span aria-hidden="true" className="l-sq" />
+                      <span>{msgs[(Math.floor(tick / 2) + i) % msgs.length]}</span>
+                    </p>
+                  </article>
+                );
+              }
+              if (state === "missing" || !draft) {
+                return (
+                  <article key={p} className="l-post">
+                    <PostHeader name={name} fmt={FORMAT[p]} />
+                    <div className="l-post-empty">
+                      <p>
+                        {failed
+                          ? `The run stopped before the ${name} post was written.`
+                          : `The planner didn’t write a ${name} post for this idea.`}
+                      </p>
+                    </div>
+                  </article>
+                );
+              }
+              const text = composePost({ platform: p, body: draft.body, hashtags: draft.hashtags });
+              const max = PLATFORM_PLAYBOOKS[p]?.maxChars ?? 0;
+              const over = max > 0 && text.length > max;
+              const approved = draft.status === "approved" || draft.status === "published";
+              return (
+                <article key={p} className={`l-post is-ready${approved ? " is-approved" : ""}`}>
+                  <PostHeader name={name} fmt={FORMAT[p]} />
+                  <div className="l-reveal l-post-body">
+                    {draft.image_url ? (
+                      <figure className="l-post-figure">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={draft.image_url} alt={`Image for the ${name} post`} />
+                      </figure>
+                    ) : null}
+                    <p className="l-post-text">{text}</p>
+                    {draft.status === "needs_human" ? (
+                      <p className="l-post-flag">The critic couldn’t get this one past 0.80, read it closely</p>
+                    ) : null}
+                    <footer className="l-post-foot">
+                      <span className={`l-count${over ? " is-over" : ""}`}>
+                        {max ? `${text.length.toLocaleString()} / ${max.toLocaleString()}` : `${text.length} characters`}
+                        {draft.score != null ? ` · score ${draft.score.toFixed(2)}` : ""}
+                      </span>
+                      <button type="button" className="l-btn l-btn-ghost l-btn-sm" onClick={() => setEditing(draft.id)}>
+                        Edit
+                      </button>
+                      <button type="button" className="l-btn l-btn-ghost l-btn-sm" onClick={() => void copy(draft)}>
+                        {copied[draft.id] ? "Copied" : "Copy"}
+                      </button>
+                      <button
+                        type="button"
+                        className={`l-btn l-btn-sm ${approved ? "l-approved" : "l-btn-light"}`}
+                        disabled={approved || approving[draft.id]}
+                        onClick={() => void approve(draft)}
+                      >
+                        {draft.status === "published" ? "Published" : approved ? "Approved" : "Approve"}
+                      </button>
+                    </footer>
                   </div>
-                  <div className="platform-module-spec">
-                    <span className="spec-format">{item.spec}</span>
-                    <span className="spec-sep">•</span>
-                    <span className="spec-variant">{item.variant}</span>
-                  </div>
-                  <div className="platform-module-output-preview">{item.preview}</div>
-                </button>
+                </article>
               );
             })}
           </div>
-        </aside>
-      </div>
-
-      <div className="content-intelligence-bar">
-        <div className="intelligence-left-group">
-          <div className="intelligence-badge">Content strategy</div>
-          <div className="intelligence-metrics">
-            <Intel label="Purpose" value={goal} />
-            <div className="intel-divider" />
-            <Intel label="Audience" value={selectedAudience} />
-            <div className="intel-divider" />
-            <Intel label="Tone" value={tone} />
-            <div className="intel-divider" />
-            <Intel label="Format" value={format} />
-          </div>
-        </div>
-        <button type="button" className="btn-adjust-strategy" onClick={() => setStrategyOpen(true)}>
-          Adjust strategy
-        </button>
-      </div>
-
-      <div className="create-command-bar">
-        <div className="command-bar-left">
-          <span className="command-bar-status-dot" />
-          <div className="command-bar-summary">
-            <span className="command-bar-title">{generating ? "Generating…" : "Ready to create"}</span>
-            <span className="command-bar-subtitle">
-              {platforms.length} platforms • 1 core idea • {includeResearch ? "AI research enabled" : "Fast generation"}
-            </span>
-          </div>
-        </div>
-        <div className="command-bar-right">
-          <button type="button" className="btn btn-subtle" onClick={() => setAdvancedOpen(true)}>
-            Advanced controls
-          </button>
-          <button
-            type="button"
-            className="btn-generate-cta"
-            disabled={pending || generating || idea.trim().length < 20}
-            onClick={generate}
-          >
-            {pending ? "Starting…" : "Generate content"}
-          </button>
-        </div>
-      </div>
-      {error ? <p className="text-xs text-destructive">{error}</p> : null}
-
-      <div className={`ai-generation-overlay${generating || done ? " active" : ""}`}>
-        <div className="generation-header">
-          <div>
-            <h3 className="generation-title">Generating Platform Content</h3>
-            <p className="generation-subtitle">
-              Orchestrator is actively routing tasks to domain specialist agents.
-            </p>
-          </div>
-          <span className="orchestrator-working-badge">
-            <span className="badge-dot" />
-            {status === "failed" ? "Failed" : generating ? "Orchestrator Active" : "Ready"}
-          </span>
-        </div>
-        <div className="pipeline-steps-container">
-          {PIPELINE.map((step, idx) => {
-            const state = done || (stepIndex > idx && lastStep)
-              ? "completed"
-              : stepIndex === idx && generating
-                ? "running"
-                : "waiting";
-            return (
-              <div key={step.title} className={`pipeline-step-item ${state}`}>
-                <div className="step-indicator-circle">{idx + 1}</div>
-                <div className="step-details-meta">
-                  <span className="step-title-text">{step.title}</span>
-                  <span className="step-detail-subtext">{step.sub}</span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        {campaignId ? (
-          <p style={{ marginTop: 16 }}>
-            <Link href={`/campaigns/${campaignId}`} className="module-link">
-              Open live run →
-            </Link>
-          </p>
-        ) : null}
-      </div>
-
-      <div className={`generation-output-showcase${done ? " active" : ""}`}>
-        <div className="showcase-header">
-          <div className="showcase-title-wrap">
-            <span className="showcase-badge">Content Ready</span>
-            <h2 className="showcase-title">Platform Content Generated</h2>
-          </div>
-          <button type="button" className="btn btn-primary" onClick={approveAll} disabled={pending}>
-            Approve All to Review Pipeline
-          </button>
-        </div>
-        <div className="showcase-cards-grid">
-          {drafts.map((draft) => (
-            <article key={draft.id} className="result-platform-card">
-              <div className="result-card-header">
-                <PlatformPill platform={draft.platform} />
-                <span className="badge badge-green">
-                  {draft.score != null ? `${Math.round(draft.score * 10)}/10` : "Ready"}
-                </span>
-              </div>
-              <div className="result-content-body">
-                <div className="result-content-snippet">{draft.body.slice(0, 280)}</div>
-              </div>
-              <div className="result-card-actions">
-                <button type="button" className="btn-result-action" onClick={() => setEditing(draft)}>
-                  Preview
-                </button>
-                <button
-                  type="button"
-                  className="btn-result-approve"
-                  onClick={() =>
-                    void reviewDraftOrThrow(draft.campaign_id, draft.id, { action: "approve" }).then(
-                      () => toast.success("Approved"),
-                      (err) => toast.error(err instanceof Error ? err.message : "Failed"),
-                    )
-                  }
-                >
-                  Approve
-                </button>
-              </div>
-            </article>
-          ))}
-        </div>
-      </div>
-
-      <Drawer open={strategyOpen} onClose={() => setStrategyOpen(false)} size="narrow">
-        <DrawerHeader title="Content Strategy" sub="Positioning and distribution intent" onClose={() => setStrategyOpen(false)} />
-        <div style={{ padding: "22px 24px", display: "flex", flexDirection: "column", gap: 20 }}>
-          <ChipGroup label="Primary Purpose" values={["Awareness", "Thought Leadership", "Product Launch", "Lead Gen"]} active={goal} onSelect={setGoal} />
-          <ChipGroup label="Target Persona" values={audiences} active={selectedAudience} onSelect={setSelectedAudience} />
-          <ChipGroup
-            label="Narrative Format"
-            values={["Educational", "Contrarian Thesis", "Step-by-Step Playbook", "Case Study"]}
-            active={format}
-            onSelect={setFormat}
-          />
-          <button type="button" className="btn btn-primary" onClick={() => setStrategyOpen(false)}>
-            Apply Strategy
-          </button>
-        </div>
-      </Drawer>
-
-      <Drawer open={advancedOpen} onClose={() => setAdvancedOpen(false)} size="narrow">
-        <DrawerHeader title="Advanced Controls" sub="Research depth and generation constraints" onClose={() => setAdvancedOpen(false)} />
-        <div style={{ padding: "22px 24px", display: "flex", flexDirection: "column", gap: 20 }}>
-          <label className="drawer-setting-label">Research depth</label>
-          <div className="segmented-control">
-            {["quick", "standard", "deep"].map((val) => (
-              <button
-                key={val}
-                type="button"
-                className={`segmented-btn${research === val ? " active" : ""}`}
-                onClick={() => setResearch(val)}
-              >
-                {val}
-              </button>
-            ))}
-          </div>
-          <label className="drawer-setting-label">Creativity · {creativity.toFixed(1)}</label>
-          <input
-            type="range"
-            min={0.1}
-            max={1}
-            step={0.1}
-            value={creativity}
-            onChange={(e) => setCreativity(Number(e.target.value))}
-          />
-          <label className="drawer-setting-label">Content length</label>
-          <div className="segmented-control">
-            {["short", "medium", "long"].map((val) => (
-              <button
-                key={val}
-                type="button"
-                className={`segmented-btn${length === val ? " active" : ""}`}
-                onClick={() => setLength(val)}
-              >
-                {val}
-              </button>
-            ))}
-          </div>
-          <label className="toggle-setting-row">
-            <span>Include research</span>
-            <input type="checkbox" checked={includeResearch} onChange={(e) => setIncludeResearch(e.target.checked)} />
-          </label>
-          <label className="toggle-setting-row">
-            <span>Use brand voice</span>
-            <input type="checkbox" checked={brandVoice} onChange={(e) => setBrandVoice(e.target.checked)} />
-          </label>
-          <label className="drawer-setting-label">Image (optional)</label>
-          <input
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            onChange={(e) => setImage(e.target.files?.[0] ?? null)}
-          />
-          <button type="button" className="btn btn-primary" onClick={() => setAdvancedOpen(false)}>
-            Save Preferences
-          </button>
-        </div>
-      </Drawer>
+        )}
+      </section>
 
       <EditorDrawer
-        draft={editing}
+        drafts={editorDrafts}
+        openId={editing}
         author={{
-          name: brandName ?? "Brand",
-          handle: (brandName ?? "brand").toLowerCase().replace(/\s+/g, ""),
-          initial: (brandName ?? "B").slice(0, 1).toUpperCase(),
+          name: brandName ?? "Your brand",
+          handle: (brandName ?? "yourbrand").toLowerCase().replace(/\s+/g, ""),
         }}
         canMutate
         onClose={() => setEditing(null)}
-        onChanged={() => undefined}
+        onChanged={() => {
+          if (campaignId) void load(campaignId);
+        }}
       />
-    </div>
+    </>
   );
 }
 
-function Intel({ label, value }: { label: string; value: string }) {
+function PostHeader({ name, fmt }: { name: string; fmt: string }) {
   return (
-    <div className="intelligence-item">
-      <span className="intel-label">{label}</span>
-      <span className="intel-value">{value}</span>
-    </div>
+    <header className="l-post-head">
+      <h3>{name}</h3>
+      <span>{fmt}</span>
+    </header>
   );
 }
 
-function ChipGroup({
-  label,
-  values,
-  active,
-  onSelect,
-  onAdd,
-}: {
-  label: string;
-  values: string[];
-  active: string;
-  onSelect: (value: string) => void;
-  onAdd?: () => void;
-}) {
-  return (
-    <div className="context-group">
-      <div className="context-group-header">
-        <span className="context-group-label">{label}</span>
-      </div>
-      <div className="chip-cluster">
-        {values.map((value) => (
-          <button
-            key={value}
-            type="button"
-            className={`context-chip${active === value ? " active" : ""}`}
-            onClick={() => onSelect(value)}
-          >
-            {value}
-          </button>
-        ))}
-        {onAdd ? (
-          <button type="button" className="context-chip add-chip" onClick={onAdd}>
-            +
-          </button>
-        ) : null}
-      </div>
-    </div>
-  );
+function loadingMessages(p: PlatformId, lastStep: string | undefined): string[] {
+  const name = platformLabel(p);
+  if (lastStep === "critique" || lastStep === "revise") {
+    return [`Critic is scoring the ${name} draft`, "Tightening the first line", `Checking the ${LIMIT_WORD[p]}`];
+  }
+  if (lastStep === "draft" || lastStep === "image") {
+    return [`Checking the ${LIMIT_WORD[p]}`, "Critic is scoring the draft", "Tightening the first line"];
+  }
+  return ["Reading your brand voice", `Writing the ${name} version`, `Checking the ${LIMIT_WORD[p]}`];
 }
 
-function DrawerHeader({
-  title,
-  sub,
-  onClose,
-}: {
-  title: string;
-  sub: string;
-  onClose: () => void;
-}) {
+/** "SAY IT ONCE", each letter knocked slightly off its baseline. */
+function SayItOnce() {
+  const rots = [-4, 3, -2, 5, -3, 2, -5, 4, -2];
+  const lifts = [0, -6, 4, -2, 6, -4, 2, -6, 0];
+  let n = 0;
   return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        padding: "18px 24px",
-        borderBottom: "1px solid var(--border-subtle)",
-      }}
-    >
-      <div>
-        <h3 style={{ fontSize: "1.05rem", fontWeight: 700 }}>{title}</h3>
-        <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>{sub}</span>
-      </div>
-      <button type="button" className="btn-icon" onClick={onClose} aria-label="Close">
-        ×
-      </button>
-    </div>
+    <h1 aria-label="Say it once" className="l-say">
+      {["Say", "it", "once"].map((word, wi) => (
+        <span key={word} aria-hidden="true" className={`l-say-word${wi === 2 ? " l-lime" : ""}`}>
+          {word.split("").map((ch) => {
+            const k = n++;
+            return (
+              <span
+                key={k}
+                className="l-say-ch"
+                style={{ transform: `rotate(${rots[k % rots.length]}deg) translateY(${lifts[k % lifts.length]}px)` }}
+              >
+                {ch}
+              </span>
+            );
+          })}
+        </span>
+      ))}
+    </h1>
   );
 }

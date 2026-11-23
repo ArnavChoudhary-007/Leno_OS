@@ -45,14 +45,12 @@ export async function GET(request: Request) {
 
     const brand = await loadBrandVisual(ctx.workspaceId);
     return new ImageResponse(
-      (
-        <CarouselSlideMarkup
-          brand={brand}
-          text={slides[slide]}
-          index={slide}
-          total={slides.length}
-        />
-      ),
+      CarouselSlideMarkup({
+        brand,
+        text: slides[slide],
+        index: slide,
+        total: slides.length,
+      }),
       { ...OG_SIZE },
     );
   } catch (err) {

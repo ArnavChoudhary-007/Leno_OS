@@ -20,6 +20,15 @@ export async function getWorkspaceBySlug(
   return row ?? null;
 }
 
+export async function getWorkspaceById(id: string): Promise<Workspace | null> {
+  const [row] = await db
+    .select()
+    .from(workspaces)
+    .where(eq(workspaces.id, id))
+    .limit(1);
+  return row ?? null;
+}
+
 export async function getMembershipByUserId(
   userId: string,
 ): Promise<(WorkspaceMember & { workspace: Workspace }) | null> {

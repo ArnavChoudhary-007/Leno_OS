@@ -1,11 +1,19 @@
-import type { Metadata } from "next";
-import Script from "next/script";
-import { Geist_Mono, Plus_Jakarta_Sans } from "next/font/google";
+import type { Metadata, Viewport } from "next";
+import { Archivo, Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 import "./globals.css";
 
-const jakarta = Plus_Jakarta_Sans({
-  variable: "--font-jakarta",
+// Display face: Archivo with its width axis, so headings can run condensed
+// (font-stretch: 75%) and buttons semi-condensed (85%).
+const archivo = Archivo({
+  variable: "--font-archivo",
+  subsets: ["latin"],
+  axes: ["wdth"],
+  display: "swap",
+});
+
+const geist = Geist({
+  variable: "--font-geist",
   subsets: ["latin"],
   display: "swap",
 });
@@ -13,42 +21,33 @@ const jakarta = Plus_Jakarta_Sans({
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
   title: "Leno OS",
   description:
-    "Turns one campaign brief into on-brand, platform-native social posts.",
+    "Say it once. Leno turns one idea into a native post for every feed, and nothing goes live until you approve it.",
 };
 
-const themeScript = `(function(){
-  try {
-    var stored = localStorage.getItem("leno-theme");
-    var theme = stored === "light" || stored === "dark"
-      ? stored
-      : (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-    document.documentElement.setAttribute("data-theme", theme);
-    document.documentElement.classList.toggle("dark", theme === "dark");
-  } catch (e) {}
-})();`;
+export const viewport: Viewport = {
+  themeColor: "#0A0A0A",
+  colorScheme: "dark",
+};
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      data-theme="light"
-      className={`${jakarta.variable} ${geistMono.variable} h-full antialiased`}
-      suppressHydrationWarning
+      data-theme="dark"
+      className={`dark ${archivo.variable} ${geist.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">
-        <Script id="leno-theme" strategy="beforeInteractive">
-          {themeScript}
-        </Script>
         {children}
         <Toaster
-          position="top-center"
+          position="bottom-left"
           toastOptions={{
-            className: "border-border bg-card text-card-foreground shadow-md",
+            className: "leno-toast",
           }}
         />
       </body>

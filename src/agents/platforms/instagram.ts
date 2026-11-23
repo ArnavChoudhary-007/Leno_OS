@@ -28,9 +28,9 @@ const AGENT_URL = process.env.INSTAGRAM_AGENT_URL || "http://localhost:5002";
  * Conforms strictly to Leno OS's DraftSchema ({ platform: 'instagram', body, hashtags }).
  */
 export async function generateDraft(
-  brand: BrandProfile | any,
-  plan: Plan | any,
-  strategy?: Strategy | any
+  brand: BrandProfile | Record<string, unknown>,
+  plan: Plan | Record<string, unknown>,
+  strategy?: Strategy | Record<string, unknown>
 ): Promise<Draft> {
   try {
     const res = await fetch(`${AGENT_URL}/api/draft`, {
@@ -57,11 +57,17 @@ export async function generateDraft(
   }
 
   // Resilient fallback draft conforming to DraftSchema
-  const topic = plan?.key_message || strategy?.angle || "Autonomous Multi-Agent Distribution";
-  const brandName = brand?.name || "NexusAI";
+  const str = (v: unknown): string | undefined => (typeof v === "string" && v ? v : undefined);
+  const hooks = (strategy as { hooks?: unknown } | undefined)?.hooks;
+  const firstHook = Array.isArray(hooks) ? str(hooks[0]) : undefined;
+  const topic =
+    str((plan as { key_message?: unknown })?.key_message) ||
+    str((strategy as { angle?: unknown } | undefined)?.angle) ||
+    "Autonomous Multi-Agent Distribution";
+  const brandName = str((brand as { name?: unknown })?.name) || "NexusAI";
   return DraftSchema.parse({
     platform: "instagram",
-    body: `${strategy?.hooks?.[0] || topic}\n\nMost teams don't have a content bottleneck—they have a distribution bottleneck.\n\nSwipe through for the complete breakdown:\n• Slide 1: The Bottleneck\n• Slide 2: Decoupled Domain Agents\n• Slide 3: Typed Schema Contracts\n• Slide 4: Real-time Verification Loops\n• Slide 5: The Operating System\n\nSave this post if you are designing next-generation multi-agent architectures.`,
+    body: `${firstHook || topic}\n\nMost teams don't have a content bottleneck—they have a distribution bottleneck.\n\nSwipe through for the complete breakdown:\n• Slide 1: The Bottleneck\n• Slide 2: Decoupled Domain Agents\n• Slide 3: Typed Schema Contracts\n• Slide 4: Real-time Verification Loops\n• Slide 5: The Operating System\n\nSave this post if you are designing next-generation multi-agent architectures.`,
     hashtags: [
       `#${brandName.replace(/\s+/g, "")}`,
       "#MultiAgentSystems",

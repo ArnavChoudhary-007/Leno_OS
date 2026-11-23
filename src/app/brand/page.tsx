@@ -26,27 +26,31 @@ export default async function BrandPage() {
       current="brand"
       workspaceId={ctx.workspaceId}
     >
-      <PageHeader
-        eyebrow="Brand"
-        title="The card every agent reads"
-        description="Voice, audience, and examples live here. Change this, and the next campaign writes differently."
-      />
-
-      {!profile ? (
-        <EmptyState
-          className="mt-6"
-          title="Nothing saved yet"
-          description="Fill in the form, or load the Loopwave demo to see how a complete brand card looks."
+      <div className="l-page">
+        <PageHeader
+          title="Brand card"
+          description="Voice, audience and examples live here. Every agent reads this before it writes, so change it and the next post sounds different."
         />
-      ) : null}
 
-      <div className="card mt-8">
-        <BrandForm
-          key={profile?.updated_at ?? "empty"}
-          profile={profile}
-          readOnly={!canMutate}
-          showDemo={canLoadDemo}
-        />
+        {!profile ? (
+          <EmptyState
+            title="Nothing saved yet"
+            description={
+              canLoadDemo
+                ? "Fill in the form, or load the Loopwave demo to see how a complete brand card looks."
+                : "Fill in the form below. Leno can’t write posts until a brand card is saved."
+            }
+          />
+        ) : null}
+
+        <div className="l-card" style={{ padding: 28 }}>
+          <BrandForm
+            key={profile?.updated_at ?? "empty"}
+            profile={profile}
+            readOnly={!canMutate}
+            showDemo={canLoadDemo}
+          />
+        </div>
       </div>
     </AppShell>
   );

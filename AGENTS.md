@@ -39,10 +39,18 @@ the rubric constants and `src/agents/orchestrator/index.ts` for the loop.
 - `src/agents/` — orchestrator, strategy, critic, and one module per
   platform (`agents/platforms/`). Brand/audience and research agents are
   planned but not built; don't leave empty stubs for them.
+- `src/components/` — app shell (sidebar, top bar, ⌘K palette, notifications)
+  and `leno/` shared pieces (drawer, editor drawer, post actions)
+- `src/styles/leno/` — the Leno design system: `tokens.css` (near-black,
+  off-white, lime `#C8FF1A`; Archivo condensed display + Geist), `base.css`
+  (buttons, inputs, badges, tabs, tables), `shell.css`, `pages.css`
 - `src/creative/` — branded OG quote cards + carousel slides (`next/og`)
 - `src/tools/` — `llm.ts` (model registry), `social/bluesky.ts` (publish)
 - `src/memory/context.ts` — loads the brand profile for agent prompts
 - `src/workflows/campaign-run.ts` — starts a campaign run in the background
+- `src/workflows/publish-scheduled.ts` — once a minute, publishes approved
+  drafts whose scheduled time has arrived (started from `instrumentation.ts`,
+  off when `PUBLIC_DEMO=1`)
 - `src/db/` — Drizzle schema (Postgres/pgTable), client, seed. Locked
  design in `docs/DATABASE.md`.
 - `src/shared/` — `schemas.ts` (all zod schemas), `types.ts` (inferred

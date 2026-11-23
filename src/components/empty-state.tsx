@@ -13,17 +13,10 @@ export function EmptyState({
   className?: string;
 }) {
   return (
-    <div
-      className={cn(
-        "card flex flex-col items-start gap-3 border-dashed",
-        className,
-      )}
-    >
-      <div>
-        <p className="card-title">{title}</p>
-        <p className="card-subtitle">{description}</p>
-      </div>
-      {action ? <div className="flex flex-wrap gap-2">{action}</div> : null}
+    <div className={cn("l-empty", className)}>
+      <p className="l-empty-title">{title}</p>
+      <p className="l-empty-text">{description}</p>
+      {action ? <div className="flex flex-wrap gap-3">{action}</div> : null}
     </div>
   );
 }

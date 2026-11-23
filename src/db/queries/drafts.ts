@@ -1,4 +1,4 @@
-import { and, desc, eq, isNotNull, ne } from "drizzle-orm";
+import { and, desc, eq, isNotNull, lte, ne } from "drizzle-orm";
 import { db } from "@/db/client";
 import { campaigns, drafts } from "@/db/schema";
 import type { Critique, DraftStatus, PlatformId } from "@/shared/types";
@@ -169,11 +169,12 @@ export async function workspaceDraftStats(workspaceId: string): Promise<{
   for (const row of rows) {
     if (row.status === "published") published += 1;
     if (row.status === "needs_human" || row.status === "draft") review += 1;
-    if (row.scheduled_at) scheduled += 1;
+    if (row.status === "approved" && row.scheduled_at) scheduled += 1;
   }
   return { published, review, scheduled, total: rows.length };
 }
 
+/** Approved posts with a publish time, soonest first. */
 export async function listScheduledDraftsInWorkspace(
   workspaceId: string,
   limit = 6,
@@ -184,11 +185,64 @@ export async function listScheduledDraftsInWorkspace(
     .where(
       and(
         eq(drafts.workspace_id, workspaceId),
+        eq(drafts.status, "approved"),
         isNotNull(drafts.scheduled_at),
       ),
     )
     .orderBy(drafts.scheduled_at)
     .limit(limit);
+}
+
+/** Approved drafts whose publish time has arrived, across all workspaces. */
+export async function listDueScheduledDrafts(
+  now: Date,
+  limit = 10,
+): Promise<DraftRow[]> {
+  return db
+    .select()
+    .from(drafts)
+    .where(
+      and(
+        eq(drafts.status, "approved"),
+        isNotNull(drafts.scheduled_at),
+        lte(drafts.scheduled_at, now.toISOString()),
+      ),
+    )
+    .orderBy(drafts.scheduled_at)
+    .limit(limit);
+}
+
+/**
+ * Take a due draft off the schedule before publishing it, so two workers
+ * can't both publish it. Returns false if someone else got there first.
+ */
+export async function claimScheduledDraft(
+  id: string,
+  scheduledAt: string,
+): Promise<boolean> {
+  const rows = await db
+    .update(drafts)
+    .set({ scheduled_at: null })
+    .where(
+      and(
+        eq(drafts.id, id),
+        eq(drafts.status, "approved"),
+        eq(drafts.scheduled_at, scheduledAt),
+      ),
+    )
+    .returning({ id: drafts.id });
+  return rows.length === 1;
+}
+
+/** Put a claimed draft back on the schedule after a failed publish. */
+export async function restoreDraftSchedule(
+  id: string,
+  scheduledAt: string,
+): Promise<void> {
+  await db
+    .update(drafts)
+    .set({ scheduled_at: scheduledAt })
+    .where(and(eq(drafts.id, id), eq(drafts.status, "approved")));
 }
 
 export async function saveReviewNote(

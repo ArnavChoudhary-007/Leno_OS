@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { toast } from "sonner";
+import { PLATFORM_PLAYBOOKS, composePost } from "@/agents/platforms";
+import { CloseIcon } from "@/components/app-chrome";
 import { Drawer } from "@/components/leno/drawer";
-import { FeedPreview, QualityScorecard, type FeedAuthor } from "@/components/leno/feed-preview";
-import { PLATFORM_PLAYBOOKS } from "@/agents/platforms";
-import { localToIso, reviewDraftOrThrow } from "@/lib/review-draft";
+import { reviewDraftOrThrow } from "@/lib/review-draft";
 import { platformLabel } from "@/lib/workspace-ui";
 import type { CritiqueScores, DraftStatus, PlatformId } from "@/shared/types";
 
@@ -22,178 +22,238 @@ export type EditorDraft = {
   image_url: string | null;
 };
 
+export type FeedAuthor = {
+  name: string;
+  handle: string;
+};
+
+const CRITERIA: { key: keyof CritiqueScores; label: string }[] = [
+  { key: "brand_voice", label: "Brand voice" },
+  { key: "goal_fit", label: "Goal fit" },
+  { key: "platform_fit", label: "Platform fit" },
+  { key: "craft", label: "Craft" },
+];
+
+/**
+ * Edit one post with a live preview and the critic's scorecard. When given
+ * several drafts, tabs switch between them (Create page); otherwise it
+ * edits the single draft it was opened on.
+ */
 export function EditorDrawer({
-  draft,
+  drafts,
+  openId,
   author,
   canMutate,
   onClose,
   onChanged,
 }: {
-  draft: EditorDraft | null;
+  drafts: EditorDraft[];
+  openId: string | null;
   author: FeedAuthor;
   canMutate: boolean;
   onClose: () => void;
   onChanged: () => void;
 }) {
-  const [body, setBody] = useState(draft?.body ?? "");
-  const [preview, setPreview] = useState(draft?.platform ?? "linkedin");
-  const [scheduleLocal, setScheduleLocal] = useState("");
+  const open = openId !== null && drafts.some((d) => d.id === openId);
+  return (
+    <Drawer open={open} onClose={onClose} size="wide" label="Edit post">
+      {open ? (
+        <EditorBody
+          key={openId}
+          drafts={drafts}
+          initialId={openId}
+          author={author}
+          canMutate={canMutate}
+          onClose={onClose}
+          onChanged={onChanged}
+        />
+      ) : null}
+    </Drawer>
+  );
+}
+
+function EditorBody({
+  drafts,
+  initialId,
+  author,
+  canMutate,
+  onClose,
+  onChanged,
+}: {
+  drafts: EditorDraft[];
+  initialId: string;
+  author: FeedAuthor;
+  canMutate: boolean;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const [currentId, setCurrentId] = useState(initialId);
+  const [texts, setTexts] = useState<Record<string, string>>(() =>
+    Object.fromEntries(drafts.map((d) => [d.id, d.body])),
+  );
   const [pending, startTransition] = useTransition();
 
-  useEffect(() => {
-    setBody(draft?.body ?? "");
-    setPreview(draft?.platform ?? "linkedin");
-    setScheduleLocal("");
-  }, [draft]);
+  const draft = drafts.find((d) => d.id === currentId) ?? drafts[0];
+  const platform = draft.platform as PlatformId;
+  const name = platformLabel(platform);
+  const body = texts[draft.id] ?? draft.body;
+  const composed = composePost({ platform, body, hashtags: draft.hashtags });
+  const max = PLATFORM_PLAYBOOKS[platform]?.maxChars ?? 0;
+  const over = max > 0 && composed.length > max;
+  const dirty = body.trim() !== draft.body.trim();
+  const locked = draft.status === "published";
+  const isApproved = draft.status === "approved";
 
-  const open = Boolean(draft);
-  const platform = (draft?.platform ?? "linkedin") as PlatformId;
-  const playbook = PLATFORM_PLAYBOOKS[platform];
-  const limit = playbook?.maxChars ?? 3000;
-  const currentBody = draft ? body : "";
-
-  function run(label: string, fn: () => Promise<void>) {
+  function run(label: string, steps: (() => Promise<void>)[], close = true) {
     startTransition(async () => {
       try {
-        await fn();
+        for (const step of steps) await step();
         toast.success(label);
         onChanged();
-        onClose();
+        if (close) onClose();
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Action failed");
       }
     });
   }
 
+  const saveEdit = () =>
+    reviewDraftOrThrow(draft.campaign_id, draft.id, {
+      action: "edit",
+      body: body.trim(),
+      hashtags: draft.hashtags,
+    });
+  const approve = () => reviewDraftOrThrow(draft.campaign_id, draft.id, { action: "approve" });
+
   return (
-    <Drawer open={open} onClose={onClose} size="wide">
-      {draft ? (
-        <div className="editor-drawer-container">
-          <div className="editor-drawer-header">
-            <div>
-              <h3 id="editorDrawerTitle" style={{ fontSize: "1.05rem", fontWeight: 700 }}>
-                Review Content
-              </h3>
-              <span style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>
-                {platformLabel(platform)} · {draft.status}
-              </span>
-            </div>
-            <button type="button" className="btn-icon" onClick={onClose} aria-label="Close">
-              ×
+    <>
+      <div className="l-drawer-head" style={{ alignItems: "center" }}>
+        <h2 className="l-drawer-title">Edit {name}</h2>
+        <button type="button" className="l-icon-btn" aria-label="Close" onClick={onClose}>
+          <CloseIcon />
+        </button>
+      </div>
+
+      {drafts.length > 1 ? (
+        <div role="tablist" aria-label="Post" className="l-tabs l-tabs-deep" style={{ alignSelf: "flex-start" }}>
+          {drafts.map((d) => (
+            <button
+              key={d.id}
+              type="button"
+              role="tab"
+              className="l-tab"
+              aria-selected={d.id === draft.id}
+              onClick={() => setCurrentId(d.id)}
+            >
+              {platformLabel(d.platform)}
             </button>
-          </div>
-          <div className="editor-drawer-body">
-            <QualityScorecard scores={draft.scores} />
-            <div className="tab-nav" style={{ width: "100%" }}>
-              {(["linkedin", "instagram", "x"] as const).map((id) => (
-                <button
-                  key={id}
-                  type="button"
-                  className={`tab-nav-btn editor-preview-tab${preview === id ? " active" : ""}`}
-                  onClick={() => setPreview(id)}
-                >
-                  {id === "x" ? "Twitter/X Preview" : `${platformLabel(id)} Preview`}
-                </button>
-              ))}
-            </div>
-            <div className="preview-container-box">
-              <FeedPreview
-                platform={preview}
-                body={currentBody}
-                hashtags={draft.hashtags}
-                imageUrl={draft.image_url}
-                author={author}
-              />
-            </div>
-            <div className="input-group">
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <label className="input-label" htmlFor="editorCopyInput">
-                  Edit copy
-                </label>
-                <span
-                  style={{
-                    fontSize: "0.75rem",
-                    color: currentBody.length > limit ? "var(--status-red)" : "var(--text-muted)",
-                  }}
-                >
-                  {currentBody.length} / {limit} characters
-                </span>
-              </div>
-              <textarea
-                id="editorCopyInput"
-                className="input-field"
-                rows={6}
-                value={currentBody}
-                disabled={!canMutate || pending}
-                onChange={(e) => setBody(e.target.value)}
-              />
-            </div>
-            {canMutate ? (
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: "auto" }}>
-                <button type="button" className="btn btn-secondary" onClick={onClose}>
-                  Cancel
-                </button>
-                <input
-                  type="datetime-local"
-                  className="input-field"
-                  style={{ width: 190 }}
-                  value={scheduleLocal}
-                  onChange={(e) => setScheduleLocal(e.target.value)}
-                />
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  disabled={pending || !scheduleLocal}
-                  onClick={() => {
-                    const iso = localToIso(scheduleLocal);
-                    if (!iso) return;
-                    run("Scheduled", () =>
-                      reviewDraftOrThrow(draft.campaign_id, draft.id, {
-                        action: "schedule",
-                        scheduled_at: iso,
-                      }),
-                    );
-                  }}
-                >
-                  Schedule
-                </button>
-                {body !== draft.body ? (
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    disabled={pending}
-                    onClick={() =>
-                      run("Saved", () =>
-                        reviewDraftOrThrow(draft.campaign_id, draft.id, {
-                          action: "edit",
-                          body,
-                          hashtags: draft.hashtags,
-                        }),
-                      )
-                    }
-                  >
-                    Save copy
-                  </button>
-                ) : null}
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  disabled={pending}
-                  onClick={() =>
-                    run("Approved", () =>
-                      reviewDraftOrThrow(draft.campaign_id, draft.id, {
-                        action: "approve",
-                      }),
-                    )
-                  }
-                >
-                  Approve Post
-                </button>
-              </div>
-            ) : null}
-          </div>
+          ))}
         </div>
       ) : null}
-    </Drawer>
+
+      <div className="l-preview">
+        <div className="l-preview-author">
+          <span aria-hidden="true" className="l-preview-avatar">
+            {author.name.slice(0, 1).toUpperCase()}
+          </span>
+          <span className="l-preview-who">
+            <span className="l-preview-name">{platform === "x" || platform === "threads" ? `@${author.handle}` : author.name}</span>
+            <span className="l-preview-meta">{name} · preview</span>
+          </span>
+        </div>
+        {draft.image_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={draft.image_url} alt="" className="l-preview-img" />
+        ) : null}
+        <p className="l-preview-text">{composed}</p>
+      </div>
+
+      <div className="l-field">
+        <div className="l-field-row">
+          <label htmlFor="edtext" className="l-label">
+            Post text
+          </label>
+          <span className={`l-count${over ? " is-over" : ""}`}>
+            {max ? `${composed.length.toLocaleString()} / ${max.toLocaleString()}` : `${composed.length} characters`}
+          </span>
+        </div>
+        <textarea
+          id="edtext"
+          rows={9}
+          className="l-input l-input-deep"
+          value={body}
+          disabled={!canMutate || pending || locked}
+          onChange={(e) => setTexts((t) => ({ ...t, [draft.id]: e.target.value }))}
+        />
+        {draft.hashtags.length ? (
+          <span className="l-faint" style={{ fontSize: 13 }}>
+            Hashtags are added on publish: {draft.hashtags.map((t) => `#${t.replace(/^#+/, "")}`).join(" ")}
+          </span>
+        ) : null}
+      </div>
+
+      <section aria-label="Critic score" className="l-score">
+        <div className="l-score-head">
+          <span style={{ fontWeight: 600 }}>Critic score</span>
+          <span className="mono" style={{ fontSize: 15 }}>
+            <span className="l-lime">{draft.score != null ? draft.score.toFixed(2) : "—"}</span> · passes at 0.80
+          </span>
+        </div>
+        {draft.scores ? (
+          CRITERIA.map((c) => {
+            const val = draft.scores?.[c.key] ?? 0;
+            return (
+              <div key={c.key} className="l-score-row">
+                <span className="l-score-label">{c.label}</span>
+                <span aria-hidden="true" className="l-score-track">
+                  <span className="l-score-fill" style={{ width: `${Math.round(val * 100)}%` }} />
+                  <span className="l-score-mark" />
+                </span>
+                <span className="mono" style={{ textAlign: "right" }}>
+                  {val.toFixed(2)}
+                </span>
+              </div>
+            );
+          })
+        ) : (
+          <p className="l-faint" style={{ margin: 0, fontSize: 14 }}>
+            Not scored yet
+          </p>
+        )}
+        {dirty ? (
+          <p className="l-faint" style={{ margin: 0, fontSize: 13 }}>
+            Scores are for the critic’s version; your edits aren’t re-scored.
+          </p>
+        ) : null}
+      </section>
+
+      {canMutate && !locked ? (
+        <div className="l-drawer-actions">
+          <button
+            type="button"
+            className="l-btn l-btn-light"
+            disabled={pending || !body.trim() || (isApproved && !dirty)}
+            onClick={() => run(dirty ? "Saved and approved" : "Approved", dirty ? [saveEdit, approve] : [approve])}
+          >
+            {dirty ? "Save and approve" : isApproved ? "Approved" : "Approve"}
+          </button>
+          <button
+            type="button"
+            className="l-btn l-btn-quiet"
+            disabled={pending || !dirty || !body.trim()}
+            onClick={() => run("Saved as draft", [saveEdit])}
+          >
+            Keep as draft
+          </button>
+          <button type="button" className="l-btn l-btn-ghost" onClick={onClose}>
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <p className="l-faint" style={{ margin: 0 }}>
+          {locked ? "This post is live, so it can’t be edited here." : "You can read this post; an editor can change it."}
+        </p>
+      )}
+    </>
   );
 }

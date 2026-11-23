@@ -1,144 +1,131 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
-import { AgentDrawer, type AgentInfo } from "@/components/leno/agent-drawer";
-import { Bot, Shield, Sparkles, Users } from "lucide-react";
+import { useState } from "react";
 
-export function AgentsView({ agents }: { agents: AgentInfo[] }) {
-  const [open, setOpen] = useState<AgentInfo | null>(null);
+export type AgentCard = {
+  id: string;
+  label: string;
+  status: string;
+  on: boolean;
+  busy: boolean;
+  role: string;
+  task: string;
+  stats: { label: string; value: string }[];
+  caps: string[];
+  last: string;
+};
+
+export function AgentsView({
+  agents,
+  models,
+  writers,
+}: {
+  agents: AgentCard[];
+  models: { writer: string; critic: string };
+  writers: string[];
+}) {
+  const [selectedId, setSelectedId] = useState(agents[0]?.id);
+  const sel = agents.find((a) => a.id === selectedId) ?? agents[0];
+  const model = sel.id === "critic" ? models.critic : sel.id === "image" || sel.id === "research" ? null : models.writer;
 
   return (
-    <div className="agents-container">
-      <div className="agents-header">
-        <div>
-          <h2 className="agents-title">Specialist Agents</h2>
-          <p className="agents-subtitle">
-            Your dedicated distribution team, coordinated behind the scenes.
-          </p>
-        </div>
-      </div>
+    <div className="l-page">
+      <h1 className="l-h1">Agents</h1>
 
-      <div className="orchestration-flow-card">
-        <strong style={{ fontSize: "1rem" }}>Agent Orchestration & Task Routing Architecture</strong>
-        <div className="flow-diagram-wrapper">
-          <FlowNode icon={<Users size={22} />} label="User Brief" sub="Intent & Goals" />
-          <div className="flow-connector-line" />
-          <FlowNode
-            icon={<Sparkles size={22} />}
-            label="Orchestrator"
-            sub="Task Dispatch"
-            accent
-          />
-          <div className="flow-connector-line" />
-          <FlowNode icon={<Bot size={22} />} label="Specialist Agents" sub="LinkedIn • Instagram • X" />
-          <div className="flow-connector-line" />
-          <FlowNode icon={<Shield size={22} />} label="Critic Engine" sub="Quality Gate" />
-          <div className="flow-connector-line" />
-          <FlowNode icon={<Users size={22} />} label="Human Review" sub="Final Approval" />
+      <section aria-label="How a brief moves" className="l-card l-flow">
+        <div className="l-flow-node">Your brief</div>
+        <span aria-hidden="true" className="l-flow-arrow">→</span>
+        <div className="l-flow-node is-light">Orchestrator</div>
+        <span aria-hidden="true" className="l-flow-arrow">→</span>
+        <div className="l-flow-stack">
+          {writers.map((w) => (
+            <span key={w} className="l-flow-chip">
+              {w}
+            </span>
+          ))}
         </div>
-      </div>
+        <span aria-hidden="true" className="l-flow-arrow">→</span>
+        <div className="l-flow-node is-outline">
+          <span style={{ fontWeight: 600 }}>Critic</span>
+          <span className="l-muted" style={{ fontSize: 13 }}>
+            Below 0.80 goes back, up to 3 rounds
+          </span>
+        </div>
+        <span aria-hidden="true" className="l-flow-arrow">→</span>
+        <div className="l-flow-node is-lime">You approve</div>
+      </section>
 
-      <div className="agents-cards-grid">
-        {agents.map((agent) => (
-          <button
-            type="button"
-            key={agent.id}
-            className="agent-card"
-            onClick={() => setOpen(agent)}
-          >
-            <div className="agent-card-header">
-              <div className="agent-card-identity">
-                <div className="agent-avatar-box">
-                  <Bot size={22} />
-                </div>
-                <div className="agent-info-names">
-                  <span className="agent-title-text">{agent.name}</span>
-                  <span className="agent-persona-tag">{agent.role}</span>
-                </div>
+      <div className="l-agents">
+        <div className="l-agent-list">
+          {agents.map((a) => (
+            <button
+              key={a.id}
+              type="button"
+              className="l-agent"
+              aria-pressed={a.id === sel.id}
+              onClick={() => setSelectedId(a.id)}
+            >
+              <span aria-hidden="true" className={`l-dot${a.on ? "" : " is-off"}${a.busy ? " l-pulse" : ""}`} />
+              <span className="l-agent-text">
+                <span className="l-agent-name">{a.label}</span>
+                <span className="l-agent-task">{a.task}</span>
+              </span>
+              <span className="l-agent-last">{a.last}</span>
+            </button>
+          ))}
+        </div>
+        <aside aria-label="Agent details" className="l-card l-agent-detail" aria-live="polite">
+          <div className="l-stack-8">
+            <span style={{ fontSize: 14, color: sel.on ? "var(--l-lime)" : "var(--l-text-3)" }}>{sel.status}</span>
+            <h2 className="l-display" style={{ fontSize: 44, lineHeight: 0.95 }}>
+              {sel.label}
+            </h2>
+            <p className="l-lede" style={{ fontSize: 16 }}>
+              {sel.role}
+            </p>
+          </div>
+          <div className="l-agent-stats">
+            {sel.stats.map((s) => (
+              <div key={s.label} className="l-stack-4">
+                <span className="l-faint" style={{ fontSize: 13 }}>
+                  {s.label}
+                </span>
+                <span className="mono" style={{ fontSize: 22 }}>
+                  {s.value}
+                </span>
               </div>
-              <span className={`badge badge-${agent.statusType}`}>
-                <span className="badge-dot" />
-                {agent.status}
+            ))}
+          </div>
+          <div className="l-stack-10">
+            <span className="l-muted" style={{ fontSize: 14 }}>
+              Working on
+            </span>
+            <span style={{ fontSize: 16 }}>{sel.task}</span>
+          </div>
+          {model ? (
+            <div className="l-stack-10">
+              <span className="l-muted" style={{ fontSize: 14 }}>
+                Model
+              </span>
+              <span className="mono" style={{ fontSize: 14 }}>
+                {model}
               </span>
             </div>
-            <div style={{ fontSize: "0.84rem", color: "var(--text-secondary)" }}>
-              <strong>Current Task:</strong> {agent.currentTask}
-            </div>
-            <div className="agent-card-stats">
-              <div className="agent-stat-item">
-                <span className="agent-stat-num">{agent.tasksCompleted}</span>
-                <span className="agent-stat-name">Tasks Completed</span>
-              </div>
-              <div className="agent-stat-item">
-                <span className="agent-stat-num">{agent.uptime}</span>
-                <span className="agent-stat-name">Health / Uptime</span>
-              </div>
-            </div>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                paddingTop: 8,
-                borderTop: "1px solid var(--border-subtle)",
-                fontSize: "0.75rem",
-                color: "var(--text-muted)",
-              }}
-            >
-              <span>Last active: {agent.lastActive}</span>
-              <span className="btn btn-sm btn-subtle">Inspect Agent →</span>
-            </div>
-          </button>
-        ))}
-        <div className="agent-card" style={{ borderStyle: "dashed", background: "transparent" }}>
-          <div className="agent-card-header">
-            <div className="agent-card-identity">
-              <div
-                className="agent-avatar-box"
-                style={{
-                  background: "var(--bg-surface-subtle)",
-                  border: "1px dashed var(--border-medium)",
-                  color: "var(--text-muted)",
-                }}
-              >
-                +
-              </div>
-              <div className="agent-info-names">
-                <span className="agent-title-text">Add Platform Agent</span>
-                <span className="agent-persona-tag">YouTube, TikTok, Substack</span>
-              </div>
+          ) : null}
+          <div className="l-stack-10">
+            <span className="l-muted" style={{ fontSize: 14 }}>
+              What it handles
+            </span>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {sel.caps.map((c) => (
+                <span key={c} className="l-cap">
+                  {c}
+                </span>
+              ))}
             </div>
           </div>
-          <p className="card-subtitle">Coming later — the playbook registry is how new channels land.</p>
-        </div>
+        </aside>
       </div>
-
-      <AgentDrawer agent={open} onClose={() => setOpen(null)} />
-    </div>
-  );
-}
-
-function FlowNode({
-  icon,
-  label,
-  sub,
-  accent,
-}: {
-  icon: ReactNode;
-  label: string;
-  sub: string;
-  accent?: boolean;
-}) {
-  return (
-    <div className="flow-node-box">
-      <div
-        className="flow-node-icon-circle"
-        style={accent ? { borderColor: "var(--accent-primary)", color: "var(--accent-primary)" } : undefined}
-      >
-        {icon}
-      </div>
-      <span className="flow-node-label">{label}</span>
-      <span className="flow-node-sub">{sub}</span>
     </div>
   );
 }

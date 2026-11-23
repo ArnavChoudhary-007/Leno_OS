@@ -29,6 +29,6 @@ export function Field({
   );
 }
 
-export const inputClass = "input-field w-full";
+export const inputClass = "l-input l-input-deep w-full";
 
-export const textareaClass = "input-field w-full min-h-28";
+export const textareaClass = "l-input l-input-deep w-full min-h-28";

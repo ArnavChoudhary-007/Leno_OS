@@ -29,10 +29,7 @@ export async function GET(request: Request) {
     if (!quote) throw new AppError("not_found", "Draft not found");
 
     const brand = await loadBrandVisual(ctx.workspaceId);
-    return new ImageResponse(
-      <QuoteCardMarkup brand={brand} quote={quote} />,
-      { ...OG_SIZE },
-    );
+    return new ImageResponse(QuoteCardMarkup({ brand, quote }), { ...OG_SIZE });
   } catch (err) {
     if (err instanceof AppError) {
       return jsonErrorCode(err.code, { requestId, message: err.message });

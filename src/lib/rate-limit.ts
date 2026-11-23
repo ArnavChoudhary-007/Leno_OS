@@ -106,6 +106,12 @@ export const RATE_LIMITS = {
     max: 10,
     windowMs: 60 * 60 * 1000,
   }),
+  /** Each revision is two LLM calls, so it gets its own, tighter budget. */
+  draftRevise: (userId: string): RateLimit => ({
+    key: `draft_revise:${userId}`,
+    max: 20,
+    windowMs: 60 * 60 * 1000,
+  }),
   draftMutate: (userId: string): RateLimit => ({
     key: `draft_mutate:${userId}`,
     max: 60,

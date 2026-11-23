@@ -1,10 +1,17 @@
 import type { ReactNode } from "react";
-import { AppChrome, type ShellNav } from "@/components/app-chrome";
+import { AppChrome, type PaletteEntry, type ShellNav } from "@/components/app-chrome";
 import type { ChromeNotification } from "@/components/notifications";
 import { workspaceCampaignStats } from "@/db/queries/campaigns";
 import { listWorkspaceLatestDrafts, workspaceDraftStats } from "@/db/queries/drafts";
+import { getWorkspaceById } from "@/db/queries/workspaces";
+import { isPublicDemo } from "@/auth/public-demo";
+import { platformLabel, postTitle } from "@/lib/workspace-ui";
 import type { WorkspaceRole } from "@/shared/types";
 
+/**
+ * Server half of the app frame: loads the counts, notifications and
+ * searchable posts the sidebar, top bar and command palette show.
+ */
 export async function AppShell({
   children,
   email,
@@ -20,41 +27,47 @@ export async function AppShell({
   current: ShellNav;
   workspaceId: string;
 }) {
-  const [stats, campaignStats, latest] = await Promise.all([
+  const [stats, campaignStats, latest, workspace] = await Promise.all([
     workspaceDraftStats(workspaceId),
     workspaceCampaignStats(workspaceId),
-    listWorkspaceLatestDrafts(workspaceId, 8),
+    listWorkspaceLatestDrafts(workspaceId, 40),
+    getWorkspaceById(workspaceId),
   ]);
 
   const notifications: ChromeNotification[] = [];
   if (stats.review > 0) {
     notifications.push({
-      id: "review",
-      title: `${stats.review} posts waiting for review`,
-      detail: "Attention required",
-      tone: "amber",
-      href: "/campaigns?status=Review",
+      id: `review-${stats.review}`,
+      title: `${stats.review} post${stats.review === 1 ? " is" : "s are"} waiting for your approval`,
+      at: latest.find((d) => d.status === "draft" || d.status === "needs_human")?.created_at ?? null,
+      href: "/campaigns?status=Waiting",
+      unread: true,
     });
   }
   if (campaignStats.running > 0) {
     notifications.push({
-      id: "running",
-      title: "Orchestrator is generating drafts",
-      detail: `${campaignStats.running} campaign${campaignStats.running === 1 ? "" : "s"} in flight`,
-      tone: "blue",
+      id: `running-${campaignStats.running}`,
+      title: `Agents are writing ${campaignStats.running === 1 ? "a campaign" : `${campaignStats.running} campaigns`} right now`,
+      at: null,
       href: "/track",
+      unread: true,
     });
   }
-  const published = latest.find((d) => d.status === "published");
-  if (published) {
+  for (const draft of latest.filter((d) => d.status === "published").slice(0, 2)) {
     notifications.push({
-      id: "published",
-      title: "A post went live",
-      detail: published.body.slice(0, 72),
-      tone: "green",
-      href: `/campaigns/${published.campaign_id}`,
+      id: `published-${draft.id}`,
+      title: `“${postTitle(draft).slice(0, 60)}” went live on ${platformLabel(draft.platform)}`,
+      at: draft.created_at,
+      href: `/campaigns/${draft.campaign_id}`,
+      unread: false,
     });
   }
+
+  const posts: PaletteEntry[] = latest.slice(0, 24).map((draft) => ({
+    label: postTitle(draft),
+    kind: `${platformLabel(draft.platform)} post`,
+    href: `/track?post=${draft.id}`,
+  }));
 
   return (
     <AppChrome
@@ -62,9 +75,12 @@ export async function AppShell({
       role={role}
       canMutate={canMutate}
       current={current}
+      workspaceName={workspace?.name ?? "Workspace"}
       reviewCount={stats.review}
-      agentCount={campaignStats.running > 0 ? 3 : 4}
-      notifications={notifications.slice(0, 4)}
+      runningCount={campaignStats.running}
+      notifications={notifications.slice(0, 5)}
+      posts={posts}
+      canSignOut={!isPublicDemo()}
     >
       {children}
     </AppChrome>

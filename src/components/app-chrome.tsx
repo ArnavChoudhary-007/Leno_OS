@@ -1,29 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { signOut } from "@/auth/actions";
-import { BrandMark } from "@/components/brand-mark";
+import { BrandLockup } from "@/components/brand-mark";
 import { CommandPalette } from "@/components/command-palette";
 import {
   NotificationBell,
   type ChromeNotification,
 } from "@/components/notifications";
-import { ThemeToggle } from "@/components/theme-toggle";
-import { roleLabel } from "@/lib/workspace-ui";
-import {
-  BarChart3,
-  Bot,
-  CircleHelp,
-  FileText,
-  LayoutDashboard,
-  Link2,
-  LogOut,
-  Menu,
-  Palette,
-  PenLine,
-  Radio,
-} from "lucide-react";
+import { greetingName, roleLabel } from "@/lib/workspace-ui";
 import type { WorkspaceRole } from "@/shared/types";
 
 export type ShellNav =
@@ -37,17 +23,25 @@ export type ShellNav =
   | "brand"
   | "help";
 
-const VIEW_META: Record<ShellNav, { title: string; desc: string }> = {
-  overview: { title: "Overview", desc: "System health and distribution performance" },
-  create: { title: "Create Content", desc: "AI-assisted generation and multi-platform adaptation" },
-  content: { title: "Content Library", desc: "Manage, filter, and schedule platform assets" },
-  track: { title: "Content Tracking", desc: "Monitor lifecycle from generation to publication" },
-  analytics: { title: "Performance Analytics", desc: "Distribution metrics and audience engagement" },
-  agents: { title: "Specialist Agents", desc: "Autonomous agent team and orchestration flow" },
-  integrations: { title: "Connected Integrations", desc: "Platform API authorizations and sync channels" },
-  brand: { title: "Settings", desc: "Brand card every agent reads before writing" },
-  help: { title: "Help & Docs", desc: "How Leno OS plans, drafts, and publishes" },
+export type PaletteEntry = {
+  label: string;
+  kind: string;
+  href: string;
 };
+
+const VIEW_META: Record<ShellNav, { title: string; sub: string }> = {
+  create: { title: "Create", sub: "One idea, a post for every feed" },
+  overview: { title: "Overview", sub: "How your distribution is doing" },
+  content: { title: "Content", sub: "Every post Leno has written for you" },
+  track: { title: "Track", sub: "Where every post is, from idea to live" },
+  analytics: { title: "Analytics", sub: "What Leno has written and shipped" },
+  agents: { title: "Agents", sub: "Who writes, who checks, and what they're doing now" },
+  integrations: { title: "Integrations", sub: "Where Leno can publish, and where you post by hand" },
+  brand: { title: "Settings", sub: "The brand card every agent reads first" },
+  help: { title: "Help and docs", sub: "How Leno plans, writes and publishes" },
+};
+
+const COLLAPSE_KEY = "leno_nav_collapsed";
 
 export function AppChrome({
   children,
@@ -55,202 +49,236 @@ export function AppChrome({
   role,
   canMutate,
   current,
+  workspaceName,
   reviewCount,
-  agentCount,
+  runningCount,
   notifications,
+  posts,
+  canSignOut,
 }: {
   children: ReactNode;
   email: string | null;
   role: WorkspaceRole;
   canMutate: boolean;
   current: ShellNav;
+  workspaceName: string;
   reviewCount: number;
-  agentCount: number;
+  runningCount: number;
   notifications: ChromeNotification[];
+  posts: PaletteEntry[];
+  canSignOut: boolean;
 }) {
-  const [navOpen, setNavOpen] = useState(false);
-  const initial = (email ?? role).slice(0, 1).toUpperCase();
-  const name = email?.split("@")[0] ?? role;
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
   const meta = VIEW_META[current];
+  const name = email ? greetingName(email) : "Guest editor";
+  const initial = name.slice(0, 1).toUpperCase();
+
+  // Restore the rail preference after hydration (localStorage is client-only).
+  useEffect(() => {
+    let stored = false;
+    try {
+      stored = window.localStorage.getItem(COLLAPSE_KEY) === "1";
+    } catch {
+      stored = false;
+    }
+    if (stored) {
+      const id = window.requestAnimationFrame(() => setCollapsed(true));
+      return () => window.cancelAnimationFrame(id);
+    }
+  }, []);
+
+  function setRail(next: boolean) {
+    try {
+      window.localStorage.setItem(COLLAPSE_KEY, next ? "1" : "0");
+    } catch {
+      // Private mode: keep it for this page only.
+    }
+    setCollapsed(next);
+  }
+
+  const items: { id: ShellNav; label: string; href: string; count?: number; review?: boolean }[] = [
+    ...(canMutate ? [{ id: "create" as const, label: "Create", href: "/campaigns/new" }] : []),
+    { id: "overview", label: "Overview", href: "/" },
+    { id: "content", label: "Content", href: "/campaigns", count: reviewCount || undefined, review: true },
+    { id: "track", label: "Track", href: "/track" },
+    { id: "analytics", label: "Analytics", href: "/analytics" },
+    { id: "agents", label: "Agents", href: "/agents", count: runningCount || undefined },
+    { id: "integrations", label: "Integrations", href: "/integrations" },
+  ];
+  const active = items.find((it) => it.id === current) ?? items[0];
+  const close = () => setMobileOpen(false);
+  const showRail = collapsed && !mobileOpen;
 
   return (
-    <div className="app-layout">
-      <div
-        className={`mobile-nav-backdrop${navOpen ? " open" : ""}`}
-        onClick={() => setNavOpen(false)}
+    <div className="l-app">
+      <button
+        type="button"
+        aria-label="Close navigation"
+        className={`l-mobile-backdrop${mobileOpen ? " is-open" : ""}`}
+        onClick={close}
+        tabIndex={mobileOpen ? 0 : -1}
       />
-      <aside className={`app-sidebar${navOpen ? " open" : ""}`}>
-        <Link href="/" className="sidebar-brand" onClick={() => setNavOpen(false)}>
-          <BrandMark />
-          <span className="brand-text-block">
-            <span className="brand-title">leno os</span>
-            <span className="brand-subtitle">Your AI Distribution OS</span>
-          </span>
-        </Link>
-
-        <nav className="sidebar-nav-group" aria-label="Primary">
-          <NavItem href="/" active={current === "overview"} icon={<LayoutDashboard className="nav-item-icon" />} onClick={() => setNavOpen(false)}>
-            Overview
-          </NavItem>
-          {canMutate ? (
-            <NavItem href="/campaigns/new" active={current === "create"} icon={<PenLine className="nav-item-icon" />} onClick={() => setNavOpen(false)}>
-              Create
-            </NavItem>
-          ) : null}
-          <NavItem
-            href="/campaigns"
-            active={current === "content"}
-            icon={<FileText className="nav-item-icon" />}
-            badge={reviewCount > 0 ? String(reviewCount) : undefined}
-            onClick={() => setNavOpen(false)}
-          >
-            Content
-          </NavItem>
-          <NavItem href="/track" active={current === "track"} icon={<Radio className="nav-item-icon" />} onClick={() => setNavOpen(false)}>
-            Track
-          </NavItem>
-          <NavItem href="/analytics" active={current === "analytics"} icon={<BarChart3 className="nav-item-icon" />} onClick={() => setNavOpen(false)}>
-            Analytics
-          </NavItem>
-          <NavItem
-            href="/agents"
-            active={current === "agents"}
-            icon={<Bot className="nav-item-icon" />}
-            badge={agentCount > 0 ? String(agentCount) : undefined}
-            badgeGreen
-            onClick={() => setNavOpen(false)}
-          >
-            Agents
-          </NavItem>
-          <NavItem href="/integrations" active={current === "integrations"} icon={<Link2 className="nav-item-icon" />} onClick={() => setNavOpen(false)}>
-            Integrations
-          </NavItem>
-        </nav>
-
-        <div className="sidebar-footer">
-          <div className="sidebar-nav-group">
-            <NavItem href="/brand" active={current === "brand"} icon={<Palette className="nav-item-icon" />} onClick={() => setNavOpen(false)}>
-              Settings
-            </NavItem>
-            <NavItem href="/help" active={current === "help"} icon={<CircleHelp className="nav-item-icon" />} onClick={() => setNavOpen(false)}>
-              Help & Docs
-            </NavItem>
-          </div>
-          <div className="sidebar-impact-card">
-            <p className="impact-card-text">
-              Turn ideas
-              <br />
-              into impact.
-            </p>
-            <p className="impact-card-sub">—</p>
-          </div>
-          <form action={signOut}>
-            <button type="submit" className="sidebar-nav-item" style={{ width: "100%" }}>
-              <span className="nav-item-content">
-                <LogOut className="nav-item-icon" />
-                Sign out
-              </span>
-            </button>
-          </form>
-        </div>
-      </aside>
-
-      <div className="app-main">
-        <header className="app-topbar">
-          <div className="topbar-left">
+      <aside
+        aria-label="App"
+        className={`l-sidebar${showRail ? " is-collapsed" : ""}${mobileOpen ? " is-open" : ""}`}
+      >
+        {showRail ? (
+          <>
             <button
               type="button"
-              className="sidebar-open-btn btn-icon"
+              className="l-rail-btn"
               aria-label="Open navigation"
-              onClick={() => setNavOpen(true)}
+              aria-expanded="false"
+              onClick={() => setRail(false)}
             >
-              <Menu size={18} />
+              <MenuIcon />
             </button>
-            <ThemeToggle />
-            <div>
-              <span id="topbarPageTitle" style={{ fontWeight: 700, fontSize: "1.05rem", color: "var(--text-primary)" }}>
-                {meta.title}
-              </span>
-              <span id="topbarPageDesc" style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginLeft: 8 }}>
-                {meta.desc}
-              </span>
+            <Link href={active.href} aria-label={`Current page: ${meta.title}`} className="l-rail-dot" />
+          </>
+        ) : (
+          <>
+            <div className="l-sidebar-top">
+              <BrandLockup onClick={close} />
+              <button
+                type="button"
+                className="l-collapse-btn"
+                aria-label="Hide navigation"
+                aria-expanded="true"
+                onClick={() => setRail(true)}
+              >
+                <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M10 3L5 8l5 5" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                className="l-icon-btn l-menu-btn"
+                aria-label="Close navigation"
+                onClick={close}
+              >
+                <CloseIcon />
+              </button>
             </div>
-          </div>
 
-          <div className="topbar-center">
-            <CommandPalette canMutate={canMutate} reviewCount={reviewCount} />
-            <div className="topbar-quick-actions">
-              {canMutate ? (
-                <Link href="/campaigns/new" className="topbar-pill-action pill-primary">
-                  + Create
+            <Link href="/brand" className="l-workspace" onClick={close}>
+              <span style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+                <span className="l-workspace-name">{workspaceName}</span>
+                <span className="l-workspace-sub">Workspace</span>
+              </span>
+              <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#A3A3A0" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M5 6l3-3 3 3M5 10l3 3 3-3" />
+              </svg>
+            </Link>
+
+            <nav aria-label="Sections" className="l-nav">
+              {items.map((it) => (
+                <Link
+                  key={it.id}
+                  href={it.href}
+                  className="l-nav-item"
+                  aria-current={it.id === current ? "page" : undefined}
+                  onClick={close}
+                >
+                  <span aria-hidden="true" className="l-nav-dot" />
+                  <span className="l-nav-label">{it.label}</span>
+                  {it.count ? (
+                    <span
+                      className={`l-nav-count${it.review ? " is-review" : ""}`}
+                      aria-label={it.review ? `${it.count} waiting for approval` : `${it.count} running`}
+                    >
+                      {it.count}
+                    </span>
+                  ) : null}
                 </Link>
-              ) : null}
-              <Link href="/track" className="topbar-pill-action">
-                Track
-              </Link>
-              <Link href="/analytics" className="topbar-pill-action">
-                Analytics
-              </Link>
-              <Link href="/agents" className="topbar-pill-action">
-                Agents
-              </Link>
-            </div>
-          </div>
+              ))}
+            </nav>
 
-          <div className="topbar-right">
-            <NotificationBell items={notifications} />
-            <div className="topbar-profile-btn" title={email ?? role}>
-              <span className="user-avatar">{initial}</span>
-              <span className="user-meta-block hidden sm:flex">
-                <span className="user-name max-w-40 truncate">{name}</span>
-                <span className="user-role">{roleLabel(role)}</span>
-              </span>
+            <div className="l-sidebar-foot">
+              <Link
+                href="/brand"
+                className="l-nav-item"
+                aria-current={current === "brand" ? "page" : undefined}
+                onClick={close}
+              >
+                <span aria-hidden="true" className="l-nav-dot" />
+                <span className="l-nav-label">Settings</span>
+              </Link>
+              <Link
+                href="/help"
+                className="l-nav-item"
+                aria-current={current === "help" ? "page" : undefined}
+                onClick={close}
+              >
+                <span aria-hidden="true" className="l-nav-dot" />
+                <span className="l-nav-label">Help and docs</span>
+              </Link>
+              {canSignOut ? (
+                <form action={signOut}>
+                  <button type="submit" className="l-nav-item">
+                    <span aria-hidden="true" className="l-nav-dot" />
+                    <span className="l-nav-label">Sign out</span>
+                  </button>
+                </form>
+              ) : null}
+              <div className="l-user" title={email ?? undefined}>
+                <span aria-hidden="true" className="l-avatar">
+                  {initial}
+                </span>
+                <span className="l-user-meta">
+                  <span className="l-user-name">{name}</span>
+                  <span className="l-user-role">{roleLabel(role)}</span>
+                </span>
+              </div>
             </div>
+          </>
+        )}
+      </aside>
+
+      <main className="l-main">
+        <header className="l-topbar">
+          <button
+            type="button"
+            className="l-icon-btn l-menu-btn"
+            aria-label="Open navigation"
+            aria-expanded={mobileOpen}
+            onClick={() => setMobileOpen(true)}
+          >
+            <MenuIcon />
+          </button>
+          <div className="l-topbar-title">
+            <span className="l-topbar-heading">{meta.title}</span>
+            <span className="l-topbar-sub">{meta.sub}</span>
           </div>
+          <CommandPalette canMutate={canMutate} reviewCount={reviewCount} posts={posts} />
+          <NotificationBell items={notifications} />
         </header>
-        <div className="page-content">{children}</div>
-      </div>
+        {children}
+      </main>
     </div>
   );
 }
 
-function NavItem({
-  href,
-  active,
-  icon,
-  badge,
-  badgeGreen,
-  children,
-  onClick,
-}: {
-  href: string;
-  active: boolean;
-  icon: ReactNode;
-  badge?: string;
-  badgeGreen?: boolean;
-  children: ReactNode;
-  onClick?: () => void;
-}) {
+function MenuIcon() {
   return (
-    <Link
-      href={href}
-      aria-current={active ? "page" : undefined}
-      className={`sidebar-nav-item${active ? " active" : ""}`}
-      onClick={onClick}
-    >
-      <span className="nav-item-content">
-        {icon}
-        {children}
-      </span>
-      {badge ? (
-        badgeGreen ? (
-          <span className="badge badge-green" style={{ fontSize: "0.68rem", padding: "1px 5px" }}>
-            {badge}
-          </span>
-        ) : (
-          <span className="nav-badge-pill">{badge}</span>
-        )
-      ) : null}
-    </Link>
+    <svg aria-hidden="true" width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+      <path d="M3 5h12M3 9h12M3 13h12" />
+    </svg>
+  );
+}
+
+export function CloseIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+      <path d="M3 3l10 10M13 3L3 13" />
+    </svg>
+  );
+}
+
+export function ArrowIcon({ size = 20 }: { size?: number }) {
+  return (
+    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="square">
+      <path d="M4 10h12M11 5l5 5-5 5" />
+    </svg>
   );
 }
