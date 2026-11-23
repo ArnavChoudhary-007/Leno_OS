@@ -533,49 +533,72 @@
 }
 
 /* The rainbow "writing" card */
+/* The "writing" card: an aurora in Leno's greens and teals with lime as
+   the brightest light, under a dot-matrix screen and fine film grain. */
 .l-rb {
   position: relative;
   overflow: hidden;
   isolation: isolate;
   height: 380px;
   border-radius: var(--l-r);
-  background: #ff9500;
+  background: #1e6f8a;
 }
 
 .l-rb-spin {
   position: absolute;
   inset: -60%;
-  filter: blur(40px) saturate(1.3);
-  background: conic-gradient(from 0deg, #ff9500, #ff3b30, #ff2d7a, #bf5af2, #0a84ff, #00c7be, #34c759, #c8ff1a, #ff9500);
-  animation: l-rb-spin 7s linear infinite;
+  filter: blur(46px) saturate(1.15);
+  background: conic-gradient(
+    from 0deg,
+    #c8ff1a,
+    #a6ec6c,
+    #7fd8a8,
+    #3ba7a8,
+    #1d6f93,
+    #0b3d5e,
+    #1d6f93,
+    #5cc3a6,
+    #b4f25a,
+    #c8ff1a
+  );
+  animation: l-rb-spin 9s linear infinite;
 }
 
 .l-rb-blobs {
   position: absolute;
   inset: -20%;
-  filter: blur(32px);
-  mix-blend-mode: soft-light;
+  filter: blur(36px);
   background:
-    radial-gradient(circle at 25% 35%, #ffffff 0, transparent 28%),
-    radial-gradient(circle at 70% 65%, #000000 0, transparent 30%),
-    radial-gradient(circle at 80% 20%, #ffffff 0, transparent 22%);
-  animation: l-rb-drift 3.6s ease-in-out infinite alternate;
+    radial-gradient(circle at 22% 30%, rgba(200, 255, 26, 0.75) 0, transparent 30%),
+    radial-gradient(circle at 72% 68%, rgba(8, 48, 78, 0.85) 0, transparent 34%),
+    radial-gradient(circle at 82% 18%, rgba(214, 255, 120, 0.5) 0, transparent 24%);
+  animation: l-rb-drift 4.2s ease-in-out infinite alternate;
 }
 
+/* Dot-matrix screen: a grid of soft dots whose brightness drifts in
+   patches, like the reference halftone. */
 .l-rb-sweep {
   position: absolute;
   inset: 0;
-  background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, 0.45) 50%, transparent 65%);
-  background-size: 250% 100%;
-  animation: l-rb-sweep 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.9) 0 1.1px, transparent 1.8px);
+  background-size: 7px 7px;
+  mix-blend-mode: overlay;
+  opacity: 0.85;
+  -webkit-mask-image:
+    radial-gradient(ellipse 55% 45% at var(--mx, 30%) var(--my, 35%), #000 0, rgba(0, 0, 0, 0.35) 70%, rgba(0, 0, 0, 0.15) 100%);
+  mask-image:
+    radial-gradient(ellipse 55% 45% at var(--mx, 30%) var(--my, 35%), #000 0, rgba(0, 0, 0, 0.35) 70%, rgba(0, 0, 0, 0.15) 100%);
+  animation: l-rb-dots 5s ease-in-out infinite alternate;
 }
 
+/* Film grain from SVG noise. */
 .l-rb-grain {
   position: absolute;
   inset: 0;
-  opacity: 0.22;
-  background-image: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.6) 0 1px, transparent 1px 3px);
-  mix-blend-mode: multiply;
+  opacity: 0.32;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.9 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 160px 160px;
 }
 
 .l-rb-lines {
@@ -622,12 +645,26 @@
   }
 }
 
-@keyframes l-rb-sweep {
+@property --mx {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 30%;
+}
+
+@property --my {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 35%;
+}
+
+@keyframes l-rb-dots {
   0% {
-    background-position: 150% 0;
+    --mx: 20%;
+    --my: 30%;
   }
   100% {
-    background-position: -50% 0;
+    --mx: 75%;
+    --my: 65%;
   }
 }
 
