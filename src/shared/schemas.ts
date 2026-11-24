@@ -187,6 +187,12 @@ export const CampaignBriefSchema = z.object({
     .trim()
     .min(20, "Brief must be at least 20 characters")
     .max(2000, "Brief must be at most 2000 characters"),
+  /**
+   * Platforms the person picked on Create. Optional: when absent the
+   * planner chooses from every enabled platform. When present, the
+   * planner may only choose from these (enforced in code, not the prompt).
+   */
+  platforms: z.array(PlatformIdSchema).min(1, "Pick at least one platform").max(5).optional(),
 });
 
 export const CampaignOptionsSchema = z.object({

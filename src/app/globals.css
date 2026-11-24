@@ -2,26 +2,18 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "../styles/leno/tokens.css";
-@import "../styles/leno/shell.css";
-@import "../styles/leno/components.css";
-@import "../styles/leno/overview.css";
-@import "../styles/leno/create.css";
-@import "../styles/leno/content.css";
-@import "../styles/leno/track.css";
-@import "../styles/leno/analytics.css";
-@import "../styles/leno/agents.css";
-@import "../styles/leno/integrations.css";
-@import "../styles/leno/editor.css";
-@import "../styles/leno/leno-app.css";
+@import "../styles/leno/base.css" layer(components);
+@import "../styles/leno/shell.css" layer(components);
+@import "../styles/leno/pages.css" layer(components);
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-jakarta);
+  --font-sans: var(--font-geist);
   --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-jakarta);
+  --font-heading: var(--font-archivo);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -58,41 +50,42 @@
 }
 
 :root {
-  --background: var(--bg-app);
-  --foreground: var(--text-primary);
-  --card: var(--bg-surface);
-  --card-foreground: var(--text-primary);
-  --popover: var(--bg-surface);
-  --popover-foreground: var(--text-primary);
-  --primary: var(--text-primary);
-  --primary-foreground: var(--text-inverse);
-  --secondary: var(--bg-surface-subtle);
-  --secondary-foreground: var(--text-primary);
-  --muted: var(--bg-surface-subtle);
-  --muted-foreground: var(--text-muted);
-  --accent: var(--accent-surface);
-  --accent-foreground: var(--accent-primary);
-  --destructive: var(--status-red);
-  --success: var(--status-green);
-  --success-foreground: var(--text-inverse);
-  --warning: var(--status-amber);
-  --warning-foreground: var(--status-amber);
-  --border: var(--border-subtle);
-  --input: var(--border-medium);
-  --ring: var(--accent-primary);
-  --chart-1: var(--accent-primary);
-  --chart-2: var(--status-green);
-  --chart-3: var(--status-amber);
-  --chart-4: var(--status-blue);
-  --chart-5: var(--status-purple);
-  --sidebar: var(--bg-sidebar);
-  --sidebar-foreground: var(--text-primary);
-  --sidebar-primary: var(--text-primary);
-  --sidebar-primary-foreground: var(--text-inverse);
-  --sidebar-accent: var(--bg-surface-hover);
-  --sidebar-accent-foreground: var(--text-primary);
-  --sidebar-border: var(--border-subtle);
-  --sidebar-ring: var(--accent-primary);
+  --background: var(--l-bg);
+  --foreground: var(--l-text);
+  --card: var(--l-surface);
+  --card-foreground: var(--l-text);
+  --popover: var(--l-surface);
+  --popover-foreground: var(--l-text);
+  --primary: var(--l-text);
+  --primary-foreground: var(--l-bg);
+  --secondary: var(--l-surface-2);
+  --secondary-foreground: var(--l-text);
+  --muted: var(--l-surface-2);
+  --muted-foreground: var(--l-text-3);
+  --accent: var(--l-surface-2);
+  --accent-foreground: var(--l-lime);
+  --destructive: var(--l-danger);
+  --success: var(--l-lime);
+  --success-foreground: var(--l-bg);
+  --warning: var(--l-warn);
+  --warning-foreground: var(--l-warn);
+  --border: var(--l-line);
+  --input: var(--l-line-2);
+  --ring: var(--l-lime);
+  --radius: 0.5rem;
+  --chart-1: var(--l-lime);
+  --chart-2: var(--l-text);
+  --chart-3: var(--l-warn);
+  --chart-4: #0a84ff;
+  --chart-5: #bf5af2;
+  --sidebar: var(--l-bg);
+  --sidebar-foreground: var(--l-text);
+  --sidebar-primary: var(--l-text);
+  --sidebar-primary-foreground: var(--l-bg);
+  --sidebar-accent: var(--l-surface-3);
+  --sidebar-accent-foreground: var(--l-text);
+  --sidebar-border: var(--l-line);
+  --sidebar-ring: var(--l-lime);
 }
 
 @layer base {
@@ -107,13 +100,3 @@
   }
 }
 
-@layer utilities {
-  .surface {
-    background: var(--bg-surface);
-    box-shadow: var(--shadow-sm);
-  }
-  .surface-sm {
-    background: var(--bg-surface);
-    box-shadow: var(--shadow-xs);
-  }
-}

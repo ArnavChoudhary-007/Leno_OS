@@ -1,17 +1,17 @@
 import { loadPageAuth } from "@/auth/server";
+import { isPublicDemo } from "@/auth/public-demo";
 import { can } from "@/authz/can";
 import { AppShell } from "@/components/app-shell";
 import { NoWorkspace } from "@/components/no-workspace";
+import { PageHeader } from "@/components/page-header";
+import { getPlatformConnection } from "@/db/queries/connections";
 import { env } from "@/env";
+import { relativeTime } from "@/lib/workspace-ui";
+import { isImageGenerationConfigured } from "@/tools/openai-image";
 import { blueskyConfigured } from "@/tools/social/bluesky";
-import {
-  linkedinAccountName,
-  linkedinConfigured,
-  linkedinConnected,
-  linkedinAppRedirectUri,
-} from "@/tools/social/linkedin";
+import { linkedinAppRedirectUri, linkedinConfigured } from "@/tools/social/linkedin";
 import { tavilyConfigured } from "@/tools/tavily";
-import { LinkedInActions } from "./linkedin-actions";
+import { IntegrationCard, type IntegrationItem } from "./integration-card";
 import { InviteForm } from "./invite-form";
 
 export const dynamic = "force-dynamic";
@@ -25,216 +25,143 @@ export default async function IntegrationsPage({
   if (!ctx) return <NoWorkspace />;
 
   const params = (await searchParams) ?? {};
-  const linkedinError = Array.isArray(params.linkedin_error)
-    ? params.linkedin_error[0]
-    : params.linkedin_error;
-  const linkedinJustConnected =
-    (Array.isArray(params.linkedin) ? params.linkedin[0] : params.linkedin) ===
-    "connected";
+  const first = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
+  const linkedinError = first(params.linkedin_error);
+  const justConnected = first(params.linkedin) === "connected";
 
-  const [linkedinOn, linkedinName] = await Promise.all([
-    linkedinConnected(ctx.workspaceId),
-    linkedinAccountName(ctx.workspaceId),
-  ]);
-  const bluesky = blueskyConfigured();
+  const connection = await getPlatformConnection(ctx.workspaceId, "linkedin");
+  // Same rule as publishing: a stored connection counts (tokens refresh on use).
+  const linkedinOn = Boolean(connection);
   const linkedinReady = linkedinConfigured();
-  const tavily = tavilyConfigured();
+  const bluesky = blueskyConfigured();
+  const canMutate = can(ctx.role, "mutate");
+  const demo = isPublicDemo();
 
-  const oauthErrorNote =
+  const oauthNote =
     linkedinError === "denied"
       ? "LinkedIn access was declined."
       : linkedinError === "state"
         ? "The LinkedIn sign-in expired. Connect again."
         : linkedinError === "token"
-          ? "LinkedIn did not finish connecting. Check the app products and redirect URL."
+          ? "LinkedIn didn’t finish connecting. Check the app’s products and redirect URL."
           : linkedinError === "not_configured"
-            ? "LinkedIn OAuth keys are missing from the server environment."
+            ? "LinkedIn keys are missing from the server environment."
             : null;
+
+  const items: IntegrationItem[] = [
+    {
+      id: "linkedin",
+      label: "LinkedIn",
+      account: linkedinOn ? connection!.account_name : linkedinReady ? "Not connected" : "Needs app keys",
+      state: linkedinOn ? "Connected" : linkedinReady ? "Not connected" : "Not set up",
+      what: "Approved LinkedIn posts publish straight to this account, now or at the time you schedule.",
+      details: [
+        { term: "Connection", value: "Share on LinkedIn (OAuth)" },
+        {
+          term: "Connected",
+          value: linkedinOn ? relativeTime(connection!.updated_at) : "—",
+        },
+        {
+          term: "Token renews",
+          value: linkedinOn ? new Date(connection!.expires_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "—",
+        },
+        { term: "Permissions", value: linkedinOn ? connection!.scopes.replace(/[ ,]+/g, " · ") || "w_member_social" : "openid · profile · email · w_member_social", mono: true },
+        { term: "Redirect URL", value: linkedinAppRedirectUri(), mono: true },
+      ],
+      action: !canMutate
+        ? { kind: "note", text: "An editor can connect LinkedIn for this workspace." }
+        : demo
+          ? { kind: "note", text: "Connecting accounts is off in this public demo." }
+          : !linkedinReady
+            ? { kind: "note", text: "Add LINKEDIN_CLIENT_ID and LINKEDIN_CLIENT_SECRET to the server, then restart." }
+            : linkedinOn
+              ? { kind: "linkedin-disconnect" }
+              : { kind: "link", href: "/api/integrations/linkedin/connect", label: "Connect LinkedIn" },
+    },
+    {
+      id: "bluesky",
+      label: "Bluesky",
+      account: bluesky ? env.BLUESKY_HANDLE ?? "Configured" : "Not set up",
+      state: bluesky ? "Connected" : "Not set up",
+      what: "Approved X posts publish to Bluesky, now or at the time you schedule. Instagram and Threads stay export only.",
+      details: [
+        { term: "Connection", value: "AT Protocol app password" },
+        { term: "Handle", value: env.BLUESKY_HANDLE || "—", mono: true },
+        { term: "Set in", value: "BLUESKY_HANDLE, BLUESKY_APP_PASSWORD", mono: true },
+      ],
+      action: bluesky
+        ? { kind: "none" }
+        : { kind: "note", text: "Add a Bluesky handle and app password to the server environment." },
+    },
+    {
+      id: "instagram",
+      label: "Instagram",
+      account: "Post by hand",
+      state: "Export only",
+      what: "Leno writes the caption and makes the image. Copy the caption and download the image from the post, then post it yourself.",
+      details: [],
+      action: { kind: "link", href: "/campaigns?status=Approved", label: "Find approved posts" },
+    },
+    {
+      id: "threads",
+      label: "Threads",
+      account: "Post by hand",
+      state: "Export only",
+      what: "Leno writes the post to Threads’ 500-character limit. Copy it from the post and paste it into Threads.",
+      details: [],
+      action: { kind: "link", href: "/campaigns?status=Approved", label: "Find approved posts" },
+    },
+    {
+      id: "tavily",
+      label: "Tavily research",
+      account: tavilyConfigured() ? "Search enabled" : "Optional",
+      state: tavilyConfigured() ? "Connected" : "Not set up",
+      what: "Live web sources for the LinkedIn writer, so claims have something behind them. Skipped when it isn’t set up.",
+      details: [{ term: "Set in", value: "TAVILY_API_KEY", mono: true }],
+      action: { kind: "none" },
+    },
+    {
+      id: "openai",
+      label: "OpenAI images",
+      account: isImageGenerationConfigured() ? env.IMAGE_MODEL ?? "Image model" : "Optional",
+      state: isImageGenerationConfigured() ? "Connected" : "Not set up",
+      what: "Makes one image per campaign when you don’t upload a photo, then crops it for each platform.",
+      details: [{ term: "Set in", value: "OPENAI_API_KEY, IMAGE_MODEL", mono: true }],
+      action: { kind: "none" },
+    },
+  ];
 
   return (
     <AppShell
       email={ctx.email}
       role={ctx.role}
-      canMutate={can(ctx.role, "mutate")}
+      canMutate={canMutate}
       current="integrations"
       workspaceId={ctx.workspaceId}
     >
-      <div className="integrations-container">
-        <div className="integrations-header">
-          <div>
-            <h2 className="integrations-title">Platform Integrations</h2>
-            <p style={{ fontSize: "0.88rem", color: "var(--text-muted)", marginTop: 2 }}>
-              Authorize connected social channels. Agents never publish — only approved drafts do.
-            </p>
-          </div>
-        </div>
-        {oauthErrorNote ? (
-          <p className="integration-banner integration-banner-error">{oauthErrorNote}</p>
-        ) : null}
-        {linkedinJustConnected ? (
-          <p className="integration-banner integration-banner-ok">
-            LinkedIn is connected. Approved LinkedIn drafts can publish to this account.
+      <div className="l-page">
+        <PageHeader
+          title="Integrations"
+          description="LinkedIn and Bluesky publish straight from Leno once you approve. Instagram and Threads give you the finished post and image to copy or download."
+        />
+        {oauthNote ? (
+          <p role="alert" className="l-banner is-error">
+            {oauthNote}
           </p>
         ) : null}
-        <div className="integrations-grid">
-          <article className="integration-card">
-            <div className="integration-card-header">
-              <div className="integration-identity">
-                <div className="integration-logo-box">Bl</div>
-                <div className="integration-names">
-                  <span className="integration-name">Bluesky</span>
-                  <span className="integration-account-handle">
-                    {bluesky ? "Configured via env" : "Not connected"}
-                  </span>
-                </div>
-              </div>
-              <span className={`badge badge-${bluesky ? "green" : "amber"}`}>
-                <span className="badge-dot" />
-                {bluesky ? "Connected" : "Not configured"}
-              </span>
-            </div>
-            <div className="integration-card-body">
-              AT Protocol publishing for X-format drafts to Bluesky. Instagram and Threads are export-only.
-            </div>
-            <div className="integration-meta-list">
-              <div className="integration-meta-item">
-                <span>API Gateway</span>
-                <strong>AT Protocol / bsky.social</strong>
-              </div>
-              <div className="integration-meta-item">
-                <span>Readiness</span>
-                <strong>
-                  {bluesky ? "Ready to publish approved drafts" : "Add BLUESKY_HANDLE"}
-                </strong>
-              </div>
-              <div className="integration-meta-item">
-                <span>Authentication</span>
-                <span>App password</span>
-              </div>
-            </div>
-          </article>
-
-          <article className="integration-card">
-            <div className="integration-card-header">
-              <div className="integration-identity">
-                <div className="integration-logo-box">In</div>
-                <div className="integration-names">
-                  <span className="integration-name">LinkedIn</span>
-                  <span className="integration-account-handle">
-                    {linkedinOn ? linkedinName ?? "Connected" : "Not connected"}
-                  </span>
-                </div>
-              </div>
-              <span className={`badge badge-${linkedinOn ? "green" : linkedinReady ? "amber" : "neutral"}`}>
-                <span className="badge-dot" />
-                {linkedinOn ? "Connected" : linkedinReady ? "Ready to connect" : "Not configured"}
-              </span>
-            </div>
-            <div className="integration-card-body">
-              Member posts after human approval. Redirect URL: {linkedinAppRedirectUri()}
-            </div>
-            <div className="integration-meta-list">
-              <div className="integration-meta-item">
-                <span>API Gateway</span>
-                <strong>LinkedIn UGC / Share on LinkedIn</strong>
-              </div>
-              <div className="integration-meta-item">
-                <span>Readiness</span>
-                <strong>
-                  {linkedinOn
-                    ? "Ready to publish approved LinkedIn drafts"
-                    : "Connect an account"}
-                </strong>
-              </div>
-              <div className="integration-meta-item">
-                <span>Authentication</span>
-                <span>LinkedIn OAuth</span>
-              </div>
-            </div>
-            <div className="integration-card-footer">
-              {can(ctx.role, "mutate") ? (
-                <LinkedInActions
-                  configured={linkedinReady}
-                  connected={linkedinOn}
-                  account={linkedinName}
-                />
-              ) : (
-                <p className="integration-footer-note">
-                  An editor can connect LinkedIn for this workspace.
-                </p>
-              )}
-            </div>
-          </article>
-
-          <article className="integration-card">
-            <div className="integration-card-header">
-              <div className="integration-identity">
-                <div className="integration-logo-box">Tv</div>
-                <div className="integration-names">
-                  <span className="integration-name">Tavily</span>
-                  <span className="integration-account-handle">
-                    {tavily ? "Research enabled" : "Not configured"}
-                  </span>
-                </div>
-              </div>
-              <span className={`badge badge-${tavily ? "green" : "neutral"}`}>
-                <span className="badge-dot" />
-                {tavily ? "Connected" : "Optional"}
-              </span>
-            </div>
-            <div className="integration-card-body">
-              Live web research injected into LinkedIn drafts. Writer still uses the existing model; images still use OpenAI.
-            </div>
-            <div className="integration-meta-list">
-              <div className="integration-meta-item">
-                <span>API Gateway</span>
-                <strong>Tavily Search</strong>
-              </div>
-              <div className="integration-meta-item">
-                <span>Readiness</span>
-                <strong>{tavily ? "Used on LinkedIn campaign runs" : "Add TAVILY_API_KEY"}</strong>
-              </div>
-              <div className="integration-meta-item">
-                <span>Authentication</span>
-                <span>API key</span>
-              </div>
-            </div>
-          </article>
-
-          <article className="integration-card">
-            <div className="integration-card-header">
-              <div className="integration-identity">
-                <div className="integration-logo-box">Ig</div>
-                <div className="integration-names">
-                  <span className="integration-name">Instagram</span>
-                  <span className="integration-account-handle">Coming later</span>
-                </div>
-              </div>
-              <span className="badge badge-neutral">
-                <span className="badge-dot" />
-                Planned
-              </span>
-            </div>
-            <div className="integration-card-body">Professional Creator Account</div>
-            <div className="integration-meta-list">
-              <div className="integration-meta-item">
-                <span>API Gateway</span>
-                <strong>Meta Graph API</strong>
-              </div>
-              <div className="integration-meta-item">
-                <span>Last Sync</span>
-                <strong>—</strong>
-              </div>
-              <div className="integration-meta-item">
-                <span>OAuth Scopes</span>
-                <span>0 active</span>
-              </div>
-            </div>
-          </article>
+        {justConnected ? (
+          <p role="status" className="l-banner is-ok">
+            LinkedIn is connected. Approved LinkedIn posts can publish to this account.
+          </p>
+        ) : null}
+        <div className="l-int-grid">
+          {items.map((it) => (
+            <IntegrationCard key={it.id} item={it} />
+          ))}
         </div>
-        <p className="integration-footer-note" style={{ marginTop: 4 }}>
-          Configure writer and image credentials in the server environment before generation.
-          Redirect origin: {env.APP_URL}
+        <p className="l-faint" style={{ margin: 0, fontSize: 14 }}>
+          Scheduled posts go out from the separate scheduler process (<code>npm run scheduler</code>). Writer, critic and
+          image keys live in the server environment.
         </p>
         {can(ctx.role, "invite") ? <InviteForm /> : null}
       </div>

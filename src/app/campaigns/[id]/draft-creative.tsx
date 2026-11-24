@@ -6,6 +6,10 @@ import { splitInstagramBody } from "@/agents/platforms/instagram-rules";
 import { splitCarouselSlides } from "@/creative/slides";
 import type { PlatformId } from "@/shared/types";
 
+/**
+ * The post's creative: the fitted photo, a branded quote card, an
+ * Instagram carousel (1080×1350 slides), or an Instagram story script.
+ */
 export function DraftCreative({
   draftId,
   body,
@@ -18,82 +22,59 @@ export function DraftCreative({
   imageUrl?: string | null;
 }) {
   const spec = PLATFORM_PLAYBOOKS[platform]?.imageSpec;
+  const name = PLATFORM_PLAYBOOKS[platform]?.displayName ?? platform;
   const quoteUrl = `/api/og/quote?draftId=${encodeURIComponent(draftId)}`;
-  const instagram = useMemo(() => platform === "instagram" ? splitInstagramBody(body) : null, [platform, body]);
-  const slides = useMemo(() => instagram?.slides.length ? instagram.slides : splitCarouselSlides(body), [instagram, body]);
+  const instagram = useMemo(() => (platform === "instagram" ? splitInstagramBody(body) : null), [platform, body]);
+  const slides = useMemo(
+    () => (instagram?.slides.length ? instagram.slides : splitCarouselSlides(body)),
+    [instagram, body],
+  );
   const explicitCarousel = Boolean(instagram?.slides.length);
-  const showCarousel = explicitCarousel || (!instagram?.stories.length && !imageUrl && (platform === "instagram" || slides.length > 1));
+  const stories = instagram?.stories ?? [];
+  const showCarousel = explicitCarousel || (!stories.length && !imageUrl && (platform === "instagram" || slides.length > 1));
 
   return (
-    <div className="mt-3 space-y-3 border-t border-border pt-3">
+    <div className="l-creative">
       {imageUrl && spec ? (
-        <div>
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <p className="text-xs font-medium text-muted-foreground">
-              Fitted {spec.ratio} · {spec.width}×{spec.height}
-            </p>
-            <a
-              href={imageUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="text-xs underline underline-offset-4"
-            >
-              Open JPEG
-            </a>
-          </div>
+        <figure className="l-creative-fig">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={imageUrl}
-            alt={`${PLATFORM_PLAYBOOKS[platform]?.displayName ?? platform} crop`}
-            className="w-full max-w-xs rounded-xl border border-border bg-muted object-cover"
-            style={{ aspectRatio: `${spec.width} / ${spec.height}` }}
-          />
-        </div>
-      ) : explicitCarousel || instagram?.stories.length ? null : (
-        <div>
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <p className="text-xs font-medium text-muted-foreground">Quote card</p>
-            <a
-              href={quoteUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="text-xs underline underline-offset-4"
-            >
+          <img src={imageUrl} alt={`${name} crop`} style={{ aspectRatio: `${spec.width} / ${spec.height}` }} />
+          <figcaption>
+            Cropped {spec.ratio} · {spec.width}×{spec.height}
+            <a href={imageUrl} download className="l-link">
+              Download
+            </a>
+          </figcaption>
+        </figure>
+      ) : explicitCarousel || stories.length ? null : (
+        <figure className="l-creative-fig">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={quoteUrl} alt="Branded quote card" style={{ aspectRatio: "1 / 1" }} />
+          <figcaption>
+            Quote card
+            <a href={quoteUrl} target="_blank" rel="noreferrer" className="l-link">
               Open PNG
             </a>
-          </div>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={quoteUrl}
-            alt="Branded quote card"
-            className="aspect-square w-full max-w-xs rounded-xl border border-border bg-muted object-cover"
-          />
-        </div>
+          </figcaption>
+        </figure>
       )}
 
       {showCarousel ? (
-        <div>
-          <p className="mb-2 text-xs font-medium text-muted-foreground">
+        <div className="l-stack-8">
+          <p className="l-faint" style={{ margin: 0, fontSize: 13 }}>
             {explicitCarousel ? "Instagram carousel" : "Carousel"} ({slides.length} slides)
             {explicitCarousel ? " - 1080 x 1350 JPEG" : ""}
           </p>
-          <div className="flex gap-2 overflow-x-auto pb-1">
+          <div className="l-carousel">
             {slides.map((_, index) => {
               const url = `/api/og/carousel?draftId=${encodeURIComponent(draftId)}&slide=${index}`;
               return (
-                <a
-                  key={url}
-                  href={url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="shrink-0"
-                  title={`Slide ${index + 1}`}
-                >
+                <a key={url} href={url} target="_blank" rel="noreferrer" aria-label={`Open slide ${index + 1}`}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={url}
                     alt={`Carousel slide ${index + 1}`}
-                    className={`${explicitCarousel ? "aspect-[4/5]" : "aspect-square"} w-28 rounded-md border border-border bg-muted object-cover`}
+                    className={explicitCarousel ? "aspect-[4/5]" : "aspect-square"}
                   />
                 </a>
               );
@@ -101,12 +82,20 @@ export function DraftCreative({
           </div>
         </div>
       ) : null}
-      {instagram?.stories.length ? (
-        <div>
-          <p className="mb-2 text-xs font-medium text-muted-foreground">Instagram story script ({instagram.stories.length} frames)</p>
-          <p className="mb-2 text-xs text-muted-foreground">Copy script exports the full script. Add interactive stickers in Instagram; they are instructions, not live controls.</p>
-          <ol className="list-decimal space-y-2 pl-5 text-sm">
-            {instagram.stories.map((story, index) => <li key={index}>{story}</li>)}
+
+      {stories.length ? (
+        <div className="l-stack-8">
+          <p className="l-faint" style={{ margin: 0, fontSize: 13 }}>
+            Instagram story script ({stories.length} frames)
+          </p>
+          <p className="l-faint" style={{ margin: 0, fontSize: 13 }}>
+            Copy script exports the full script. Add interactive stickers in Instagram; they are instructions, not live
+            controls.
+          </p>
+          <ol className="l-story">
+            {stories.map((story, index) => (
+              <li key={index}>{story}</li>
+            ))}
           </ol>
         </div>
       ) : null}

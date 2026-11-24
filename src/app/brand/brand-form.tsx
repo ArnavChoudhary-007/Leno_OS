@@ -257,14 +257,14 @@ export function BrandForm({
         </div>
       </form>
 
-      <aside className="surface flex flex-col gap-2 rounded-2xl border border-border p-4 lg:sticky lg:top-20 lg:self-start">
+      <aside className="l-card flex flex-col gap-3 lg:sticky lg:top-6 lg:self-start">
         <div className="flex items-baseline justify-between">
           <h2 className="text-sm font-medium">What the agents see</h2>
           <span className="text-xs text-muted-foreground">
             ~{tokenEstimate} tokens
           </span>
         </div>
-        <pre className="max-h-[70vh] overflow-auto rounded-xl bg-muted/70 p-4 font-mono text-xs whitespace-pre-wrap text-foreground">
+        <pre className="max-h-[70vh] overflow-auto rounded-lg border border-border bg-[#0A0A0A] p-4 font-mono text-xs whitespace-pre-wrap text-foreground">
           {card}
         </pre>
       </aside>

@@ -1,7 +1,9 @@
+import Link from "next/link";
 import { loadPageAuth } from "@/auth/server";
 import { can } from "@/authz/can";
 import { AppShell } from "@/components/app-shell";
 import { NoWorkspace } from "@/components/no-workspace";
+import { PageHeader } from "@/components/page-header";
 
 export const dynamic = "force-dynamic";
 
@@ -17,27 +19,66 @@ export default async function HelpPage() {
       current="help"
       workspaceId={ctx.workspaceId}
     >
-      <div className="help-prose">
-        <h1 className="content-page-title">How Leno OS works</h1>
-        <p>
-          One campaign brief becomes on-brand, platform-native social posts. An orchestrator
-          plans the work, specialist agents draft it, a critic scores it, and a human approves
-          it. Only then does plain code publish.
-        </p>
-        <ol>
-          <li>Write a brief on Create. Agents never publish from here.</li>
-          <li>The orchestrator picks a goal, audience, and channels.</li>
-          <li>Platform agents write LinkedIn, Instagram, X, and Threads copy.</li>
-          <li>The critic scores each draft. Below 0.8 goes back for revision, max 3 rounds.</li>
-          <li>You approve, schedule, or reject on Content, Track, or the campaign page.</li>
-          <li>Approved LinkedIn drafts publish to LinkedIn. X-format drafts publish to Bluesky when configured. Instagram and Threads are export-only: copy the post and download its image.</li>
-          <li>Scheduling requires the separate scheduler process. Uncertain publication outcomes are locked until an owner or administrator reconciles them on the campaign page.</li>
-        </ol>
-        <p>
-          Brand voice lives under Settings. Change the brand card and the next run writes
-          differently. Analytics counts workspace output — not third-party impressions.
-        </p>
-        <p>Owners and administrators can create teammate invitation links under Integrations. Recipients need a sign-in account matching the invited email.</p>
+      <div className="l-page">
+        <PageHeader
+          title="How Leno works"
+          description="One idea becomes an on-brand, native post for every platform you pick. Agents plan and write, a critic checks, you approve, and only then does plain code publish."
+        />
+        <div className="l-help">
+          <ol>
+            <li>
+              <span>
+                Write the idea on <Link href="/campaigns/new" className="l-link-lime">Create</Link> and pick
+                the platforms. Leno only writes for the ones you pick.
+              </span>
+            </li>
+            <li>
+              <span>The orchestrator reads your brand card, then sets a goal, an audience and one key message.</span>
+            </li>
+            <li>
+              <span>
+                A strategy agent picks the angle. LinkedIn gets live research when Tavily is set up, and an image is
+                made when you don’t upload a photo.
+              </span>
+            </li>
+            <li>
+              <span>Each platform writer drafts a native post, held to that platform’s character and hashtag limits in code.</span>
+            </li>
+            <li>
+              <span>
+                The critic scores every draft on brand voice, goal fit, platform fit and craft. Below 0.80 goes back to the
+                writer, up to 3 rounds, then it comes to you flagged.
+              </span>
+            </li>
+            <li>
+              <span>
+                You approve, edit, or ask for changes on Create, Content or{" "}
+                <Link href="/track" className="l-link-lime">Track</Link>. Asking for changes sends your note to the writer
+                and the critic re-scores the new version.
+              </span>
+            </li>
+            <li>
+              <span>
+                Approved LinkedIn posts publish to your connected LinkedIn account and X posts publish to Bluesky. Instagram
+                and Threads are export only: copy the caption or script and download the image. Publish now, or schedule it
+                and the scheduler process posts it at that time.
+              </span>
+            </li>
+          </ol>
+          <p>
+            Brand voice lives under <Link href="/brand" className="l-link-lime">Settings</Link>. Change the brand card and the
+            next run writes differently. Analytics counts what Leno wrote and shipped; views from each platform aren’t
+            connected yet.
+          </p>
+          <p>
+            If a publish attempt ends with an unclear result, the post is locked as “Publication failed” until an owner or
+            admin checks the platform and confirms what happened on the run page. Owners and admins can invite teammates
+            from Integrations.
+          </p>
+          <p className="l-faint" style={{ fontSize: 15 }}>
+            Press ⌘K (Ctrl+K on Windows) anywhere to search posts or jump to a page.
+          </p>
+        </div>
       </div>
     </AppShell>
   );

@@ -23,11 +23,7 @@ export default async function NewCampaignPage() {
       current="create"
       workspaceId={ctx.workspaceId}
     >
-      <BriefForm
-        brandName={profile?.name}
-        toneWords={profile?.tone_words}
-        audience={profile?.audience}
-      />
+      <BriefForm brandName={profile?.name ?? null} hasBrand={Boolean(profile)} />
     </AppShell>
   );
 }

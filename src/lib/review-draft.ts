@@ -31,3 +31,16 @@ export function localToIso(local: string): string | null {
   if (Number.isNaN(d.getTime())) return null;
   return d.toISOString();
 }
+
+/** "Ask for changes": the writer rewrites the post against a note. */
+export async function reviseDraftOrThrow(draftId: string, note: string): Promise<void> {
+  const res = await fetch(`/api/drafts/${draftId}/revise`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ note }),
+  });
+  if (!res.ok) {
+    const data: unknown = await res.json().catch(() => ({}));
+    throw new Error(apiErrorMessage(data, `Request failed (${res.status})`));
+  }
+}

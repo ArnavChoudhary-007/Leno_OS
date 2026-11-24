@@ -2,14 +2,13 @@
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Drawer } from "@/components/leno/drawer";
-import { DraftRevisionNote } from "@/components/leno/draft-revision-note";
-import { FeedPreview, QualityScorecard, type FeedAuthor } from "@/components/leno/feed-preview";
-import { PLATFORM_PLAYBOOKS, composePost, composeDraftExport } from "@/agents/platforms";
-import { DraftCreative } from "@/app/campaigns/[id]/draft-creative";
+import { PLATFORM_PLAYBOOKS, composeDraftExport, composePost } from "@/agents/platforms";
 import { splitInstagramBody } from "@/agents/platforms/instagram-rules";
-import { localToIso, reviewDraftOrThrow } from "@/lib/review-draft";
-import { canEditDraft, nativePublishDestination, platformLabel } from "@/lib/workspace-ui";
+import { DraftCreative } from "@/app/campaigns/[id]/draft-creative";
+import { CloseIcon } from "@/components/app-chrome";
+import { Drawer } from "@/components/leno/drawer";
+import { reviewDraftOrThrow } from "@/lib/review-draft";
+import { canApproveDraft, canEditDraft, nativePublishDestination, platformLabel } from "@/lib/workspace-ui";
 import type { CritiqueScores, DraftStatus, PlatformId } from "@/shared/types";
 
 export type EditorDraft = {
@@ -23,215 +22,297 @@ export type EditorDraft = {
   scores: CritiqueScores | null;
   scheduled_at: string | null;
   image_url: string | null;
-  publish_error: string | null;
+  publish_error?: string | null;
 };
 
-export function EditorDrawer(props: Parameters<typeof EditorDrawerSession>[0]) {
-  return <EditorDrawerSession key={props.draft?.id ?? "closed"} {...props} />;
-}
+export type FeedAuthor = {
+  name: string;
+  handle: string;
+};
 
-function EditorDrawerSession({
-  draft,
+const CRITERIA: { key: keyof CritiqueScores; label: string }[] = [
+  { key: "brand_voice", label: "Brand voice" },
+  { key: "goal_fit", label: "Goal fit" },
+  { key: "platform_fit", label: "Platform fit" },
+  { key: "craft", label: "Craft" },
+];
+
+/**
+ * Edit one post with a live preview and the critic's scorecard. When given
+ * several drafts, tabs switch between them (Create page); otherwise it
+ * edits the single draft it was opened on.
+ */
+export function EditorDrawer({
+  drafts,
+  openId,
   author,
   canMutate,
   onClose,
   onChanged,
 }: {
-  draft: EditorDraft | null;
+  drafts: EditorDraft[];
+  openId: string | null;
   author: FeedAuthor;
   canMutate: boolean;
   onClose: () => void;
   onChanged: () => void | Promise<void>;
 }) {
-  const [body, setBody] = useState(draft?.body ?? "");
-  const [preview, setPreview] = useState(draft?.platform ?? "linkedin");
-  const [scheduleLocal, setScheduleLocal] = useState("");
+  const open = openId !== null && drafts.some((d) => d.id === openId);
+  return (
+    <Drawer open={open} onClose={onClose} size="wide" label="Edit post">
+      {open ? (
+        <EditorBody
+          key={openId}
+          drafts={drafts}
+          initialId={openId}
+          author={author}
+          canMutate={canMutate}
+          onClose={onClose}
+          onChanged={onChanged}
+        />
+      ) : null}
+    </Drawer>
+  );
+}
+
+function EditorBody({
+  drafts,
+  initialId,
+  author,
+  canMutate,
+  onClose,
+  onChanged,
+}: {
+  drafts: EditorDraft[];
+  initialId: string;
+  author: FeedAuthor;
+  canMutate: boolean;
+  onClose: () => void;
+  onChanged: () => void | Promise<void>;
+}) {
+  const [currentId, setCurrentId] = useState(initialId);
+  const [texts, setTexts] = useState<Record<string, string>>(() =>
+    Object.fromEntries(drafts.map((d) => [d.id, d.body])),
+  );
   const [pending, startTransition] = useTransition();
 
-  const open = Boolean(draft);
-  const platform = (draft?.platform ?? "linkedin") as PlatformId;
-  const playbook = PLATFORM_PLAYBOOKS[platform];
-  const limit = playbook?.maxChars ?? 3000;
-  const editable = canMutate && Boolean(draft && canEditDraft(draft.status));
-  const currentBody = draft ? editable ? body : draft.body : "";
-  const caption = composePost({ platform, body: currentBody, hashtags: [] });
-  const composedLength = composePost({ platform, body: currentBody, hashtags: draft?.hashtags ?? [] }).length;
+  const draft = drafts.find((d) => d.id === currentId) ?? drafts[0];
+  const platform = draft.platform as PlatformId;
+  const name = platformLabel(platform);
+  const body = texts[draft.id] ?? draft.body;
+  const composed = composePost({ platform, body, hashtags: draft.hashtags });
+  const max = PLATFORM_PLAYBOOKS[platform]?.maxChars ?? 0;
+  const over = max > 0 && composed.length > max;
+  const dirty = body.trim() !== draft.body.trim();
+  const locked = !canEditDraft(draft.status);
+  const isApproved = draft.status === "approved";
   const destination = nativePublishDestination(platform);
-  const savedInstagram = platform === "instagram" && draft ? splitInstagramBody(draft.body) : null;
-  const imageExportUrl = draft && savedInstagram?.slides.length
+  const instagram = platform === "instagram" ? splitInstagramBody(draft.body) : null;
+  const imageExport = instagram?.slides.length
     ? `/api/og/carousel?draftId=${encodeURIComponent(draft.id)}&slide=0`
-    : draft?.image_url ?? `/api/og/quote?draftId=${encodeURIComponent(draft?.id ?? "")}`;
-  const hasImageExport = !savedInstagram?.stories.length || Boolean(draft?.image_url) || Boolean(savedInstagram?.slides.length);
+    : draft.image_url ?? (instagram?.stories.length ? null : `/api/og/quote?draftId=${encodeURIComponent(draft.id)}`);
 
-  function run(label: string, fn: () => Promise<void>) {
+  function run(label: string, steps: (() => Promise<void>)[], close = true) {
     startTransition(async () => {
       try {
-        await fn();
+        for (const step of steps) await step();
         toast.success(label);
         await onChanged();
-        onClose();
+        if (close) onClose();
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Action failed");
       }
     });
   }
 
+  async function copyAll() {
+    try {
+      await navigator.clipboard.writeText(composeDraftExport({ platform, body, hashtags: draft.hashtags }));
+      toast.success(platform === "instagram" ? "Copied the post and script" : "Copied the post");
+    } catch {
+      toast.error("Could not copy");
+    }
+  }
+
+  const saveEdit = () =>
+    reviewDraftOrThrow(draft.campaign_id, draft.id, {
+      action: "edit",
+      body: body.trim(),
+      hashtags: draft.hashtags,
+    });
+  // Approving with the edited copy saves it as a new version in the same step.
+  const approve = () =>
+    reviewDraftOrThrow(draft.campaign_id, draft.id, dirty
+      ? { action: "approve", body: body.trim(), hashtags: draft.hashtags }
+      : { action: "approve" });
+
   return (
-    <Drawer open={open} onClose={onClose} size="wide">
-      {draft ? (
-        <div className="editor-drawer-container">
-          <div className="editor-drawer-header">
-            <div>
-              <h3 id="editorDrawerTitle" style={{ fontSize: "1.05rem", fontWeight: 700 }}>
-                Review Content
-              </h3>
-              <span style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>
-                {platformLabel(platform)} · {draft.status}
-              </span>
-            </div>
-            <button type="button" className="btn-icon" onClick={onClose} aria-label="Close">
-              ×
+    <>
+      <div className="l-drawer-head" style={{ alignItems: "center" }}>
+        <h2 className="l-drawer-title">Edit {name}</h2>
+        <button type="button" className="l-icon-btn" aria-label="Close" onClick={onClose}>
+          <CloseIcon />
+        </button>
+      </div>
+
+      {drafts.length > 1 ? (
+        <div role="tablist" aria-label="Post" className="l-tabs l-tabs-deep" style={{ alignSelf: "flex-start" }}>
+          {drafts.map((d) => (
+            <button
+              key={d.id}
+              type="button"
+              role="tab"
+              className="l-tab"
+              aria-selected={d.id === draft.id}
+              onClick={() => setCurrentId(d.id)}
+            >
+              {platformLabel(d.platform)}
             </button>
-          </div>
-          <div className="editor-drawer-body">
-            <div className="flex gap-2">
-              <button type="button" className="btn btn-secondary" onClick={async () => {
-                try { await navigator.clipboard.writeText(composeDraftExport({ platform, body: currentBody, hashtags: draft.hashtags })); toast.success("Copied post"); }
-                catch { toast.error("Could not copy post"); }
-              }}>{platform === "instagram" ? "Copy draft and script" : "Copy post"}</button>
-              {hasImageExport ? <a className="btn btn-secondary" href={imageExportUrl} target="_blank" rel="noreferrer">Open image export</a> : null}
-            </div>
-            {draft.publish_error ? <p role="alert">Publication error: {draft.publish_error}</p> : null}
-            {draft.status === "publish_failed" ? <p role="alert">Publication outcome is uncertain. An admin must reconcile it before any retry. <a href={`/campaigns/${draft.campaign_id}`} className="underline">Open campaign for reconciliation</a></p> : null}
-            {!destination ? <p>Export-only platform. Copy and image export are available; native publishing and scheduling are not supported.</p> : null}
-            <QualityScorecard scores={draft.scores} />
-            <div className="tab-nav" style={{ width: "100%" }}>
-              {(["linkedin", "instagram", "x"] as const).map((id) => (
-                <button
-                  key={id}
-                  type="button"
-                  className={`tab-nav-btn editor-preview-tab${preview === id ? " active" : ""}`}
-                  onClick={() => setPreview(id)}
-                >
-                  {id === "x" ? "Twitter/X Preview" : `${platformLabel(id)} Preview`}
-                </button>
-              ))}
-            </div>
-            <div className="preview-container-box">
-              <FeedPreview
-                platform={preview}
-                body={caption}
-                hashtags={draft.hashtags}
-                imageUrl={draft.image_url}
-                author={author}
-              />
-            </div>
-            <div className="input-group">
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <label className="input-label" htmlFor="editorCopyInput">
-                  Edit copy
-                </label>
-                <span
-                  style={{
-                    fontSize: "0.75rem",
-                    color: composedLength > limit ? "var(--status-red)" : "var(--text-muted)",
-                  }}
-                >
-                  {composedLength} / {limit} caption characters including hashtags
-                </span>
-              </div>
-              <textarea
-                id="editorCopyInput"
-                className="input-field"
-                rows={6}
-                value={currentBody}
-                disabled={!editable || pending}
-                onChange={(e) => setBody(e.target.value)}
-              />
-            </div>
-            {platform === "instagram" ? (
-              <div>
-                <p className="text-xs text-muted-foreground">Saved creative exports; copied draft text includes slide and story instructions.</p>
-                <DraftCreative draftId={draft.id} body={draft.body} platform={platform} imageUrl={draft.image_url} />
-              </div>
-            ) : null}
-            {editable ? (
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: "auto" }}>
-                <button type="button" className="btn btn-secondary" onClick={onClose}>
-                  Cancel
-                </button>
-                <input
-                  type="datetime-local"
-                  className="input-field"
-                  style={{ width: 190 }}
-                  value={scheduleLocal}
-                  disabled={pending || !destination}
-                  aria-label="Schedule date and time"
-                  onChange={(e) => setScheduleLocal(e.target.value)}
-                />
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  disabled={pending || !scheduleLocal || !destination || !body.trim()}
-                  title={destination ? `Schedule on ${destination}` : "Export-only: scheduling is unavailable"}
-                  onClick={() => {
-                    const iso = localToIso(scheduleLocal);
-                    if (!iso || new Date(iso).getTime() <= Date.now()) {
-                      toast.error("Choose a future date and time");
-                      return;
-                    }
-                    run("Scheduled", () =>
-                      reviewDraftOrThrow(draft.campaign_id, draft.id, {
-                        action: "schedule",
-                        scheduled_at: iso,
-                        body,
-                        hashtags: draft.hashtags,
-                      }),
-                    );
-                  }}
-                >
-                  Schedule
-                </button>
-                {body !== draft.body ? (
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    disabled={pending || !body.trim()}
-                    onClick={() =>
-                      run("Saved", () =>
-                        reviewDraftOrThrow(draft.campaign_id, draft.id, {
-                          action: "edit",
-                          body,
-                          hashtags: draft.hashtags,
-                        }),
-                      )
-                    }
-                  >
-                    Save copy
-                  </button>
-                ) : null}
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  disabled={pending || !body.trim()}
-                  onClick={() =>
-                    run("Approved", () =>
-                      reviewDraftOrThrow(draft.campaign_id, draft.id, {
-                        action: "approve",
-                        body,
-                        hashtags: draft.hashtags,
-                      }),
-                    )
-                  }
-                >
-                  Approve Post
-                </button>
-              </div>
-            ) : null}
-            {editable && !pending && !draft.scheduled_at && body === draft.body ? <DraftRevisionNote draftId={draft.id} onChanged={async () => { await onChanged(); onClose(); }} /> : null}
-          </div>
+          ))}
         </div>
       ) : null}
-    </Drawer>
+
+      <div className="l-drawer-actions" style={{ marginTop: 0 }}>
+        <button type="button" className="l-btn l-btn-quiet l-btn-sm" onClick={() => void copyAll()}>
+          {platform === "instagram" ? "Copy post and script" : "Copy post"}
+        </button>
+        {imageExport ? (
+          <a className="l-btn l-btn-quiet l-btn-sm" href={imageExport} target="_blank" rel="noreferrer">
+            Open image export
+          </a>
+        ) : null}
+      </div>
+      {draft.publish_error ? (
+        <p role="alert" className="l-alert">
+          Publication error: {draft.publish_error}
+        </p>
+      ) : null}
+      {draft.status === "publish_failed" ? (
+        <p role="alert" className="l-alert">
+          Publication outcome is uncertain. An admin must reconcile it before any retry.{" "}
+          <a href={`/campaigns/${draft.campaign_id}`} className="l-link">
+            Open the run
+          </a>
+        </p>
+      ) : null}
+      {!destination ? (
+        <p className="l-faint" style={{ margin: 0, fontSize: 14 }}>
+          Export only: copy the post and download the image, then post it yourself.
+        </p>
+      ) : null}
+
+      <div className="l-preview">
+        <div className="l-preview-author">
+          <span aria-hidden="true" className="l-preview-avatar">
+            {author.name.slice(0, 1).toUpperCase()}
+          </span>
+          <span className="l-preview-who">
+            <span className="l-preview-name">{platform === "x" || platform === "threads" ? `@${author.handle}` : author.name}</span>
+            <span className="l-preview-meta">{name} · preview</span>
+          </span>
+        </div>
+        {draft.image_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={draft.image_url} alt="" className="l-preview-img" />
+        ) : null}
+        <p className="l-preview-text">{composed}</p>
+      </div>
+
+      {platform === "instagram" ? (
+        <DraftCreative draftId={draft.id} body={draft.body} platform={platform} imageUrl={draft.image_url} />
+      ) : null}
+
+      <div className="l-field">
+        <div className="l-field-row">
+          <label htmlFor="edtext" className="l-label">
+            Post text
+          </label>
+          <span className={`l-count${over ? " is-over" : ""}`}>
+            {max ? `${composed.length.toLocaleString()} / ${max.toLocaleString()}` : `${composed.length} characters`}
+          </span>
+        </div>
+        <textarea
+          id="edtext"
+          rows={9}
+          className="l-input l-input-deep"
+          value={body}
+          disabled={!canMutate || pending || locked}
+          readOnly={!canMutate || locked}
+          onChange={(e) => setTexts((t) => ({ ...t, [draft.id]: e.target.value }))}
+        />
+        {draft.hashtags.length ? (
+          <span className="l-faint" style={{ fontSize: 13 }}>
+            Hashtags are added on publish: {draft.hashtags.map((t) => `#${t.replace(/^#+/, "")}`).join(" ")}
+          </span>
+        ) : null}
+      </div>
+
+      <section aria-label="Critic score" className="l-score">
+        <div className="l-score-head">
+          <span style={{ fontWeight: 600 }}>Critic score</span>
+          <span className="mono" style={{ fontSize: 15 }}>
+            <span className="l-lime">{draft.score != null ? draft.score.toFixed(2) : "—"}</span> · passes at 0.80
+          </span>
+        </div>
+        {draft.scores ? (
+          CRITERIA.map((c) => {
+            const val = draft.scores?.[c.key] ?? 0;
+            return (
+              <div key={c.key} className="l-score-row">
+                <span className="l-score-label">{c.label}</span>
+                <span aria-hidden="true" className="l-score-track">
+                  <span className="l-score-fill" style={{ width: `${Math.round(val * 100)}%` }} />
+                  <span className="l-score-mark" />
+                </span>
+                <span className="mono" style={{ textAlign: "right" }}>
+                  {val.toFixed(2)}
+                </span>
+              </div>
+            );
+          })
+        ) : (
+          <p className="l-faint" style={{ margin: 0, fontSize: 14 }}>
+            Not scored yet
+          </p>
+        )}
+        {dirty ? (
+          <p className="l-faint" style={{ margin: 0, fontSize: 13 }}>
+            Scores are for the critic’s version; your edits aren’t re-scored.
+          </p>
+        ) : null}
+      </section>
+
+      {canMutate && !locked ? (
+        <div className="l-drawer-actions">
+          <button
+            type="button"
+            className="l-btn l-btn-light"
+            disabled={pending || !body.trim() || (!dirty && !canApproveDraft(draft.status))}
+            onClick={() => run(dirty ? "Saved and approved" : "Approved", [approve])}
+          >
+            {dirty ? "Save and approve" : isApproved ? "Approved" : "Approve"}
+          </button>
+          <button
+            type="button"
+            className="l-btn l-btn-quiet"
+            disabled={pending || !dirty || !body.trim()}
+            onClick={() => run("Saved as draft", [saveEdit])}
+          >
+            Keep as draft
+          </button>
+          <button type="button" className="l-btn l-btn-ghost" onClick={onClose}>
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <p className="l-faint" style={{ margin: 0 }}>
+          {draft.status === "published"
+            ? "This post is live, so it can’t be edited here."
+            : locked
+              ? "This post is being published or waiting on an admin, so it’s locked."
+              : "You can read this post; an editor can change it."}
+        </p>
+      )}
+    </>
   );
 }

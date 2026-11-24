@@ -2,12 +2,12 @@ import { cn } from "@/lib/utils";
 import type { ComponentProps } from "react";
 
 const variants = {
-  default: "badge-neutral",
-  primary: "badge-blue",
-  success: "badge-green",
-  warning: "badge-amber",
-  danger: "badge-red",
-  live: "badge-purple",
+  default: "l-badge-dashed",
+  primary: "l-badge-outline",
+  success: "l-badge-lime",
+  warning: "l-badge-light",
+  danger: "l-badge-danger",
+  live: "l-badge-outline",
 } as const;
 
 export function Badge({
@@ -21,8 +21,7 @@ export function Badge({
   live?: boolean;
 }) {
   return (
-    <span className={cn("badge", variants[variant], className)} {...props}>
-      <span className={cn("badge-dot", live && "animate-pulse")} />
+    <span className={cn("l-badge", variants[variant], live && "l-pulse", className)} {...props}>
       {children}
     </span>
   );

@@ -2,11 +2,12 @@ import Link from "next/link";
 import { loadPageAuth } from "@/auth/server";
 import { can } from "@/authz/can";
 import { AppShell } from "@/components/app-shell";
+import { ArrowIcon } from "@/components/app-chrome";
 import { EmptyState } from "@/components/empty-state";
 import { NoWorkspace } from "@/components/no-workspace";
-import { listWorkspaceLatestDrafts } from "@/db/queries/drafts";
+import { PageHeader } from "@/components/page-header";
 import { getBrandProfile } from "@/db/queries/brand";
-import { greetingName } from "@/lib/workspace-ui";
+import { listWorkspaceLatestDrafts } from "@/db/queries/drafts";
 import { ContentLibrary } from "./content-library";
 
 export const dynamic = "force-dynamic";
@@ -25,8 +26,7 @@ export default async function CampaignsPage({
     listWorkspaceLatestDrafts(ctx.workspaceId),
     getBrandProfile(ctx.workspaceId),
   ]);
-  const name = greetingName(ctx.email);
-  const handle = (profile?.name ?? name).toLowerCase().replace(/\s+/g, "");
+  const brand = profile?.name ?? "Your brand";
 
   return (
     <AppShell
@@ -36,47 +36,41 @@ export default async function CampaignsPage({
       current="content"
       workspaceId={ctx.workspaceId}
     >
-      <div className="content-page-header">
-        <div>
-          <h1 className="content-page-title">Content Library</h1>
-          <p style={{ fontSize: "0.88rem", color: "var(--text-muted)", marginTop: 2 }}>
-            Central repository of drafts, reviews, scheduled posts, and live publications.
-          </p>
-        </div>
-        {canMutate ? (
-          <Link href="/campaigns/new" className="btn btn-primary">
-            + New Content
-          </Link>
-        ) : null}
-      </div>
-
-      {posts.length === 0 ? (
-        <EmptyState
-          className="mt-6"
-          title="No posts yet"
-          description="Paste a brief to start the first run. Agents plan and draft; you approve."
-          action={
+      <div className="l-page l-page-tight">
+        <PageHeader
+          title="Content"
+          count={posts.length}
+          actions={
             canMutate ? (
-              <Link href="/campaigns/new" className="btn btn-primary">
-                Create content
+              <Link href="/campaigns/new" className="l-cta l-cta-sm">
+                Write a post
+                <ArrowIcon size={18} />
               </Link>
-            ) : undefined
+            ) : null
           }
         />
-      ) : (
-        <ContentLibrary
-          posts={posts}
-          canMutate={canMutate}
-          initialStatus={typeof params.status === "string" ? params.status : undefined}
-          initialQuery={typeof params.q === "string" ? params.q : undefined}
-          author={{
-            name: profile?.name ?? name,
-            handle,
-            initial: name.slice(0, 1).toUpperCase(),
-            role: profile?.one_liner,
-          }}
-        />
-      )}
+        {posts.length === 0 ? (
+          <EmptyState
+            title="No posts yet"
+            description="Write one idea on Create. Agents plan and draft a post per platform; you approve."
+            action={
+              canMutate ? (
+                <Link href="/campaigns/new" className="l-btn l-btn-lime">
+                  Write a post
+                </Link>
+              ) : undefined
+            }
+          />
+        ) : (
+          <ContentLibrary
+            posts={posts}
+            canMutate={canMutate}
+            initialStatus={typeof params.status === "string" ? params.status : undefined}
+            initialQuery={typeof params.q === "string" ? params.q : undefined}
+            author={{ name: brand, handle: brand.toLowerCase().replace(/\s+/g, "") }}
+          />
+        )}
+      </div>
     </AppShell>
   );
 }

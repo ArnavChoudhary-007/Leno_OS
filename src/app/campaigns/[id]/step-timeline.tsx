@@ -3,16 +3,16 @@
 import type { RunStepName } from "@/shared/types";
 
 const STEP_LABEL: Record<RunStepName, string> = {
-  load_context: "Load context",
+  load_context: "Read the brief and brand",
   plan: "Plan",
   strategy: "Strategy",
-  roster: "Select agents",
+  roster: "Picked the writers",
   research: "Research",
-  draft: "Draft",
+  draft: "Drafts written",
   image: "Image",
-  critique: "Critique",
-  revise: "Revise",
-  summary: "Summary",
+  critique: "Critic scored",
+  revise: "Revised",
+  summary: "Handed to you",
   error: "Error",
 };
 
@@ -25,35 +25,17 @@ export type TimelineStep = {
   output: unknown;
 };
 
-export function StepTimeline({ steps }: { steps: TimelineStep[] }) {
+export function StepTimeline({ steps, live }: { steps: TimelineStep[]; live: boolean }) {
   if (steps.length === 0) {
-    return (
-      <p className="card-subtitle">Waiting for the first pipeline step…</p>
-    );
+    return <p className="l-muted" style={{ margin: 0 }}>Waiting for the first step…</p>;
   }
 
-  const last = steps[steps.length - 1];
-
   return (
-    <>
-      <div className="pipeline-stage-bar" style={{ marginBottom: 16 }}>
-        {steps.map((step) => {
-          const label = STEP_LABEL[step.step as RunStepName] ?? step.step;
-          return (
-            <div
-              key={step.id}
-              className={`pipeline-stage-pill${step.id === last?.id ? " active" : ""}`}
-            >
-              <span className="stage-name-box">{label}</span>
-              <span className="stage-count-badge">{step.duration_ms}ms</span>
-            </div>
-          );
-        })}
-      </div>
-    <ol className="space-y-0">
+    <ol className="l-timeline">
       {steps.map((step, index) => {
         const label = STEP_LABEL[step.step as RunStepName] ?? step.step;
         const isError = step.step === "error";
+        const isLast = index === steps.length - 1;
         const message =
           isError &&
           step.output &&
@@ -62,37 +44,28 @@ export function StepTimeline({ steps }: { steps: TimelineStep[] }) {
           typeof step.output.message === "string"
             ? step.output.message
             : null;
-
+        const tone = isError ? "error" : isLast && live ? "now" : "done";
         return (
-          <li key={step.id} className="flex gap-3">
-            <div className="flex w-5 flex-col items-center">
-              <span
-                className={`mt-1.5 size-2.5 rounded-full ${
-                  isError ? "bg-destructive" : "bg-success"
-                }`}
-              />
-              {index < steps.length - 1 ? (
-                <span className="mt-1 w-px flex-1 bg-border" />
-              ) : null}
-            </div>
-            <div className="min-w-0 flex-1 pb-4">
-              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                <span className="text-sm font-medium">{label}</span>
-                <span className="font-mono text-xs text-muted-foreground">
-                  {step.model === "-" ? "—" : step.model}
-                </span>
-                <span className="text-xs tabular-nums text-muted-foreground">
-                  {step.duration_ms}ms
-                </span>
-              </div>
+          <li key={step.id} className={`l-tl is-${tone}`}>
+            <span className="l-tl-time">
+              {new Date(step.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}
+            </span>
+            <span aria-hidden="true" className="l-tl-rail">
+              <span className="l-tl-dot" />
+              {!isLast ? <span className="l-tl-line" /> : null}
+            </span>
+            <span className="l-tl-text">
+              {label}
+              <span className="l-faint mono" style={{ fontSize: 12, marginLeft: 8 }}>
+                {step.model === "-" ? "code" : step.model} · {(step.duration_ms / 1000).toFixed(1)}s
+              </span>
               {message ? (
-                <p className="mt-1 text-xs text-destructive">{message}</p>
+                <span style={{ display: "block", marginTop: 4, fontSize: 14 }}>{message}</span>
               ) : null}
-            </div>
+            </span>
           </li>
         );
       })}
     </ol>
-    </>
   );
 }

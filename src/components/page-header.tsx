@@ -1,30 +1,27 @@
 import type { ReactNode } from "react";
 
+/** Big condensed page title with an optional count, lede, and actions. */
 export function PageHeader({
-  eyebrow,
   title,
+  count,
   description,
   actions,
 }: {
-  eyebrow?: string;
   title: string;
-  description?: string;
+  count?: number | string;
+  description?: ReactNode;
   actions?: ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-4">
-      <div className="max-w-2xl">
-        {eyebrow ? (
-          <p className="section-micro-label" style={{ marginBottom: 6 }}>
-            {eyebrow}
-          </p>
-        ) : null}
-        <h1 className="create-cockpit-title">{title}</h1>
-        {description ? (
-          <p className="create-cockpit-subtitle">{description}</p>
-        ) : null}
+    <div className="l-page-header">
+      <div className="l-page-header-text">
+        <h1 className="l-h1">
+          {title}
+          {count !== undefined ? <span className="l-faint"> {count}</span> : null}
+        </h1>
+        {description ? <p className="l-lede">{description}</p> : null}
       </div>
-      {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
+      {actions ? <div className="l-page-header-actions">{actions}</div> : null}
     </div>
   );
 }

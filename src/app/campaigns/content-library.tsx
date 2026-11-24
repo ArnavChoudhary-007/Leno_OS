@@ -4,16 +4,22 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
-import { EditorDrawer, type EditorDraft } from "@/components/leno/editor-drawer";
-import { PlatformPill } from "@/components/leno/platform-pill";
-import type { FeedAuthor } from "@/components/leno/feed-preview";
+import { CloseIcon } from "@/components/app-chrome";
+import { EditorDrawer, type EditorDraft, type FeedAuthor } from "@/components/leno/editor-drawer";
 import { reviewDraftOrThrow } from "@/lib/review-draft";
 import {
-  draftStage,
+  CREATE_PLATFORMS,
   canApproveDraft,
   canEditDraft,
+  isWaiting,
   platformLabel,
-  stageBadgeClass,
+  postHook,
+  postStage,
+  postTitle,
+  relativeTime,
+  shortDateTime,
+  statusBadgeClass,
+  statusWord,
 } from "@/lib/workspace-ui";
 import type { CritiqueScores, DraftStatus } from "@/shared/types";
 
@@ -35,16 +41,14 @@ export type LibraryPost = {
   campaign_goal: string | null;
 };
 
-const STATUS_TABS = ["All", "Review", "Scheduled", "Publishing", "Publication failed", "Published", "Draft"] as const;
+export const STATUS_TABS = ["All", "Waiting", "Approved", "Scheduled", "Publishing", "Needs check", "Published"] as const;
+export type StatusTab = (typeof STATUS_TABS)[number];
 
-function matchesTab(post: LibraryPost, tab: (typeof STATUS_TABS)[number]): boolean {
-  const stage = draftStage(post);
+function matchesTab(post: LibraryPost, tab: StatusTab): boolean {
   if (tab === "All") return true;
-  if (tab === "Review") return stage === "Review";
-  if (tab === "Scheduled") return stage === "Scheduled";
-  if (tab === "Published") return stage === "Published";
-  if (tab === "Publishing" || tab === "Publication failed") return stage === tab;
-  return stage === "Generated" || stage === "Validated";
+  if (tab === "Waiting") return isWaiting(post);
+  if (tab === "Needs check") return post.status === "publish_failed";
+  return postStage(post) === tab;
 }
 
 export function ContentLibrary({
@@ -61,15 +65,13 @@ export function ContentLibrary({
   initialQuery?: string;
 }) {
   const router = useRouter();
-  const [tab, setTab] = useState<(typeof STATUS_TABS)[number]>(
-    STATUS_TABS.includes(initialStatus as (typeof STATUS_TABS)[number])
-      ? (initialStatus as (typeof STATUS_TABS)[number])
-      : "All",
+  const [tab, setTab] = useState<StatusTab>(
+    STATUS_TABS.includes(initialStatus as StatusTab) ? (initialStatus as StatusTab) : "All",
   );
   const [platform, setPlatform] = useState("all");
   const [query, setQuery] = useState(initialQuery ?? "");
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [editing, setEditing] = useState<EditorDraft | null>(null);
+  const [editing, setEditing] = useState<{ id: string } | null>(null);
   const [pending, startTransition] = useTransition();
 
   const filtered = useMemo(() => {
@@ -78,208 +80,171 @@ export function ContentLibrary({
       if (!matchesTab(post, tab)) return false;
       if (platform !== "all" && post.platform !== platform) return false;
       if (!q) return true;
-      return `${post.body} ${post.campaign_brief} ${post.campaign_goal ?? ""}`
-        .toLowerCase()
-        .includes(q);
+      return `${post.body} ${post.campaign_brief} ${post.campaign_goal ?? ""}`.toLowerCase().includes(q);
     });
   }, [posts, tab, platform, query]);
 
   const counts = useMemo(() => {
-    const next: Record<string, number> = { All: posts.length };
-    for (const t of STATUS_TABS) {
-      if (t === "All") continue;
-      next[t] = posts.filter((p) => matchesTab(p, t)).length;
-    }
+    const next = {} as Record<StatusTab, number>;
+    for (const t of STATUS_TABS) next[t] = posts.filter((p) => matchesTab(p, t)).length;
     return next;
   }, [posts]);
 
-  function toggle(id: string, on: boolean) {
+  const chosen = filtered.filter((p) => selected.has(p.id));
+  const allChecked = filtered.length > 0 && filtered.every((p) => selected.has(p.id));
+
+  function pickTab(t: StatusTab) {
+    setTab(t);
+    setSelected(new Set());
+    const url = new URL(window.location.href);
+    if (t === "All") url.searchParams.delete("status");
+    else url.searchParams.set("status", t);
+    window.history.replaceState(null, "", url);
+  }
+
+  function toggle(id: string) {
     setSelected((prev) => {
       const next = new Set(prev);
-      if (on) next.add(id);
-      else next.delete(id);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   }
 
-  function refresh() {
-    router.refresh();
-    setSelected(new Set());
-  }
-
-  function bulk(fn: (post: LibraryPost) => Promise<void>, label: string) {
+  function bulk(rows: LibraryPost[], fn: (post: LibraryPost) => Promise<void>, verb: string) {
     startTransition(async () => {
-      const rows = filtered.filter((p) => selected.has(p.id));
+      let done = 0;
       try {
-        for (const row of rows) await fn(row);
-        toast.success(`${label} ${rows.length} posts`);
+        for (const row of rows) {
+          await fn(row);
+          done += 1;
+        }
+        toast.success(`${verb} ${done} post${done === 1 ? "" : "s"}`);
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Bulk action failed");
+        toast.error(
+          `${done ? `${verb} ${done}, then: ` : ""}${err instanceof Error ? err.message : "Action failed"}`,
+        );
       } finally {
-        refresh();
+        setSelected(new Set());
+        router.refresh();
       }
     });
   }
 
+  const approvable = chosen.filter((p) => canApproveDraft(p.status));
+  const deletable = chosen.filter((p) => canEditDraft(p.status));
+
   return (
-    <div className="content-page-container">
-      <div className="content-filter-bar">
-        <div className="filter-left-group">
-          {STATUS_TABS.map((item) => (
-            <button
-              key={item}
-              type="button"
-              className={`filter-status-tab${tab === item ? " active" : ""}`}
-              onClick={() => setTab(item)}
-            >
-              <span>{item === "Draft" ? "Drafts" : item}</span>
-              <span className="status-count-pill">{counts[item] ?? 0}</span>
+    <>
+      <div className="l-filters">
+        <div role="tablist" aria-label="Status" className="l-tabs">
+          {STATUS_TABS.map((t) => (
+            <button key={t} type="button" role="tab" className="l-tab" aria-selected={tab === t} onClick={() => pickTab(t)}>
+              {t} <span className="mono">{counts[t]}</span>
             </button>
           ))}
         </div>
-        <div className="filter-right-group">
-          <select
-            className="input-field"
-            style={{ height: 34, padding: "0 8px", fontSize: "0.82rem" }}
-            value={platform}
-            onChange={(e) => setPlatform(e.target.value)}
-          >
-            <option value="all">All Platforms</option>
-            <option value="linkedin">LinkedIn</option>
-            <option value="instagram">Instagram</option>
-            <option value="x">Twitter / X</option>
-            <option value="threads">Threads</option>
-          </select>
-          <div className="cms-search-box">
-            <input
-              className="cms-search-input"
-              placeholder="Search posts, hooks..."
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-          </div>
-        </div>
+        <label htmlFor="plat" className="sr-only-l">
+          Platform
+        </label>
+        <select id="plat" className="l-input" value={platform} onChange={(e) => setPlatform(e.target.value)} style={{ fontSize: 14 }}>
+          <option value="all">All platforms</option>
+          {CREATE_PLATFORMS.map((p) => (
+            <option key={p} value={p}>
+              {platformLabel(p)}
+            </option>
+          ))}
+        </select>
+        <label htmlFor="q" className="sr-only-l">
+          Search posts
+        </label>
+        <input
+          id="q"
+          type="search"
+          className="l-input"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search posts"
+          style={{ flex: "1 1 200px", fontSize: 14 }}
+        />
       </div>
 
-      {canMutate && selected.size > 0 ? (
-        <div className="bulk-actions-bar active">
-          <div className="bulk-actions-left">
-            <span>{selected.size} selected</span>
-            <span>• Actions:</span>
-          </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button
-              type="button"
-              className="btn btn-sm btn-accent"
-              disabled={pending || filtered.some((post) => selected.has(post.id) && !canApproveDraft(post.status))}
-              onClick={() =>
-                bulk(
-                  (post) =>
-                    reviewDraftOrThrow(post.campaign_id, post.id, { action: "approve" }),
-                  "Approved",
-                )
-              }
-            >
-              Approve Selected
-            </button>
-            <button
-              type="button"
-              className="btn btn-sm btn-destructive"
-              disabled={pending || filtered.some((post) => selected.has(post.id) && !canEditDraft(post.status))}
-              onClick={() =>
-                bulk(
-                  (post) =>
-                    reviewDraftOrThrow(post.campaign_id, post.id, { action: "delete" }),
-                  "Deleted",
-                )
-              }
-            >
-              Delete
-            </button>
-          </div>
-        </div>
-      ) : null}
-
-      {filtered.length === 0 ? (
-        <div className="card">
-          <p className="card-title">No posts match</p>
-          <p className="card-subtitle">Try another filter, or generate content from a brief.</p>
-        </div>
-      ) : (
-        <div className="content-table-wrapper">
-          <table className="content-table">
+      <div className="l-table-box">
+        <div className="l-table-wrap">
+          <table className="l-table" style={{ minWidth: 860 }}>
             <thead>
-              <tr>
-                <th className="cell-checkbox">
-                  <input
-                    type="checkbox"
-                    checked={filtered.length > 0 && filtered.every((p) => selected.has(p.id))}
-                    onChange={(e) => {
-                      if (e.target.checked) setSelected(new Set(filtered.map((p) => p.id)));
-                      else setSelected(new Set());
-                    }}
-                  />
-                </th>
-                <th>Content Asset</th>
+              <tr style={{ borderBottom: "1px solid var(--l-line)" }}>
+                {canMutate ? (
+                  <th style={{ width: 48, paddingLeft: 20 }}>
+                    <input
+                      type="checkbox"
+                      aria-label="Select all shown"
+                      checked={allChecked}
+                      onChange={() => setSelected(allChecked ? new Set() : new Set(filtered.map((p) => p.id)))}
+                    />
+                  </th>
+                ) : null}
+                <th style={canMutate ? undefined : { paddingLeft: 20 }}>Post</th>
                 <th>Platform</th>
                 <th>Status</th>
-                <th>Author / Agent</th>
-                <th>Schedule / Publish</th>
-                <th style={{ textAlign: "right" }}>Actions</th>
+                <th>When</th>
+                <th style={{ textAlign: "right", paddingRight: 20 }}>
+                  <span className="sr-only-l">Actions</span>
+                </th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((post) => {
-                const stage = draftStage(post);
+                const on = selected.has(post.id);
+                const when = post.published_url
+                  ? "Live"
+                  : post.scheduled_at && post.status === "approved"
+                    ? shortDateTime(post.scheduled_at)
+                    : relativeTime(post.created_at);
                 return (
-                  <tr key={post.id} className="content-table-row">
-                    <td className="cell-checkbox">
-                      <input
-                        type="checkbox"
-                        checked={selected.has(post.id)}
-                        onChange={(e) => toggle(post.id, e.target.checked)}
-                      />
-                    </td>
-                    <td>
-                      <Link href={`/campaigns/${post.campaign_id}`} className="cell-content-meta">
-                        <div>
-                          <p className="content-row-title">
-                            {post.campaign_goal ?? post.body.slice(0, 80)}
-                          </p>
-                          <p className="card-subtitle">{post.body.slice(0, 100)}</p>
-                        </div>
+                  <tr key={post.id} className={on ? "is-selected" : undefined}>
+                    {canMutate ? (
+                      <td style={{ paddingLeft: 20 }}>
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${postTitle(post)} (${platformLabel(post.platform)})`}
+                          checked={on}
+                          onChange={() => toggle(post.id)}
+                        />
+                      </td>
+                    ) : null}
+                    <td style={{ maxWidth: 420, ...(canMutate ? {} : { paddingLeft: 20 }) }}>
+                      <Link href={`/campaigns/${post.campaign_id}`} className="l-row-link l-post-cell">
+                        <span style={{ fontWeight: 500 }} className="l-clip">
+                          {postTitle(post)}
+                        </span>
+                        <span className="l-faint l-clip" style={{ fontSize: 14 }}>
+                          {postHook(post.body)}
+                        </span>
                       </Link>
                     </td>
+                    <td className="l-muted">{platformLabel(post.platform)}</td>
                     <td>
-                      <PlatformPill platform={post.platform} />
+                      <span className={statusBadgeClass(post)}>{statusWord(post)}</span>
                     </td>
-                    <td>
-                      <span className={`badge ${stageBadgeClass(stage)}`}>
-                        <span className="badge-dot" />
-                        {stage}
-                      </span>
-                    </td>
-                    <td>{platformLabel(post.platform)} Agent</td>
-                    <td>
+                    <td className="l-muted" style={{ fontSize: 14 }}>
                       {post.published_url ? (
-                        <a href={post.published_url} target="_blank" rel="noreferrer">
+                        <a href={post.published_url} target="_blank" rel="noreferrer" className="l-link-lime">
                           Live
                         </a>
-                      ) : post.scheduled_at ? (
-                        new Date(post.scheduled_at).toLocaleString()
                       ) : (
-                        "—"
+                        when
                       )}
                     </td>
-                    <td style={{ textAlign: "right" }}>
-                      <button
-                        type="button"
-                        className="btn btn-sm btn-subtle"
-                        onClick={() => setEditing(post)}
-                      >
+                    <td style={{ textAlign: "right", paddingRight: 20 }}>
+                      <button type="button" className="l-btn l-btn-ghost l-btn-sm" onClick={() => setEditing({ id: post.id })}>
                         {canMutate && canEditDraft(post.status) ? "Edit" : "View"}
                       </button>
-                      {post.status === "publish_failed" ? <Link href={`/campaigns/${post.campaign_id}`} className="btn btn-sm btn-subtle">Reconcile in campaign</Link> : null}
+                      {post.status === "publish_failed" ? (
+                        <Link href={`/campaigns/${post.campaign_id}`} className="l-btn l-btn-ghost l-btn-sm">
+                          Reconcile
+                        </Link>
+                      ) : null}
                     </td>
                   </tr>
                 );
@@ -287,16 +252,52 @@ export function ContentLibrary({
             </tbody>
           </table>
         </div>
-      )}
+        {filtered.length === 0 ? (
+          <p style={{ margin: 0, padding: "48px 20px", color: "var(--l-text-4)", fontSize: 15 }}>
+            No posts match these filters
+          </p>
+        ) : null}
+      </div>
+
+      {canMutate && chosen.length > 0 ? (
+        <div className="l-bulk" role="region" aria-label="Bulk actions">
+          <span className="l-bulk-count">{chosen.length} selected</span>
+          <button
+            type="button"
+            className="l-btn l-btn-lime"
+            disabled={pending || approvable.length === 0}
+            onClick={() =>
+              bulk(approvable, (p) => reviewDraftOrThrow(p.campaign_id, p.id, { action: "approve" }), "Approved")
+            }
+          >
+            Approve{approvable.length && approvable.length !== chosen.length ? ` ${approvable.length}` : ""}
+          </button>
+          <button
+            type="button"
+            className="l-btn l-bulk-delete"
+            disabled={pending || deletable.length === 0}
+            onClick={() => {
+              if (!window.confirm(`Delete ${deletable.length} post${deletable.length === 1 ? "" : "s"}? This can’t be undone.`)) return;
+              bulk(deletable, (p) => reviewDraftOrThrow(p.campaign_id, p.id, { action: "delete" }), "Deleted");
+            }}
+          >
+            Delete
+          </button>
+          <button type="button" className="l-bulk-x" aria-label="Clear selection" onClick={() => setSelected(new Set())}>
+            <CloseIcon size={14} />
+          </button>
+        </div>
+      ) : null}
 
       <EditorDrawer
         key={editing?.id ?? "closed"}
-        draft={editing ? posts.find((post) => post.id === editing.id) ?? null : null}
+        drafts={posts.filter((p) => p.id === editing?.id) as EditorDraft[]}
+        openId={editing?.id ?? null}
         author={author}
         canMutate={canMutate}
         onClose={() => setEditing(null)}
-        onChanged={refresh}
+        onChanged={() => router.refresh()}
       />
-    </div>
+    </>
   );
 }

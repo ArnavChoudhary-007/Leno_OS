@@ -1,9 +1,11 @@
+import Link from "next/link";
 import { loadPageAuth } from "@/auth/server";
 import { can, isAdminRole } from "@/authz/can";
 import { AppShell } from "@/components/app-shell";
 import { EmptyState } from "@/components/empty-state";
 import { NoWorkspace } from "@/components/no-workspace";
 import { getCampaignInWorkspace } from "@/db/queries/campaigns";
+import { publishAccess } from "@/lib/publish-access";
 import { CampaignView } from "./campaign-view";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +17,10 @@ export default async function CampaignPage({
   if (!ctx) return <NoWorkspace />;
 
   const { id } = await params;
-  const campaign = await getCampaignInWorkspace(ctx.workspaceId, id);
+  const [campaign, access] = await Promise.all([
+    getCampaignInWorkspace(ctx.workspaceId, id),
+    publishAccess(ctx.workspaceId, ctx.role),
+  ]);
   const canMutate = can(ctx.role, "mutate");
 
   return (
@@ -26,14 +31,21 @@ export default async function CampaignPage({
       current="content"
       workspaceId={ctx.workspaceId}
     >
-      {campaign ? (
-        <CampaignView campaignId={id} canMutate={canMutate} isAdmin={isAdminRole(ctx.role)} />
-      ) : (
-        <EmptyState
-          title="Campaign not found"
-          description="It may belong to another workspace, or the link is stale. Start a new run from a brief."
-        />
-      )}
+      <div className="l-page">
+        {campaign ? (
+          <CampaignView campaignId={id} canMutate={canMutate} isAdmin={isAdminRole(ctx.role)} publish={access} />
+        ) : (
+          <EmptyState
+            title="Campaign not found"
+            description="It may belong to another workspace, or the link is old. Start a new one from Create."
+            action={
+              <Link href="/campaigns" className="l-btn l-btn-outline">
+                Back to Content
+              </Link>
+            }
+          />
+        )}
+      </div>
     </AppShell>
   );
 }
