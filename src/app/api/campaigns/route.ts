@@ -12,7 +12,8 @@ import {
 } from "@/lib/http";
 import { consumeRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { AppError } from "@/shared/errors";
-import { CampaignBriefSchema } from "@/shared/schemas";
+import { CampaignCreateSchema } from "@/shared/schemas";
+import { PLATFORM_PLAYBOOKS } from "@/agents/platforms";
 import { startCampaignRun } from "@/workflows/campaign-run";
 
 export const runtime = "nodejs";
@@ -25,9 +26,9 @@ export async function POST(request: Request) {
     requireCan(ctx, "mutate");
     await consumeRateLimit(RATE_LIMITS.campaignCreate(ctx.userId));
 
-    const { brief, image } = await readBrief(request);
+    const { brief, options, image } = await readBrief(request);
 
-    const parsed = CampaignBriefSchema.safeParse({ brief });
+    const parsed = CampaignCreateSchema.safeParse({ brief, options });
     if (!parsed.success) {
       return NextResponse.json(
         {
@@ -42,6 +43,7 @@ export async function POST(request: Request) {
     }
 
     const brand = await getBrandProfile(ctx.workspaceId);
+    if (parsed.data.options.platforms.some((platform) => !PLATFORM_PLAYBOOKS[platform].enabled)) throw new AppError("invalid_body", "Choose only enabled platforms.");
     if (!brand) {
       throw new AppError(
         "invalid_body",
@@ -54,6 +56,7 @@ export async function POST(request: Request) {
       createdBy: ctx.userId,
       brief: parsed.data.brief,
       brandId: brand.id,
+      options: parsed.data.options,
     });
 
     if (image) {
@@ -75,7 +78,7 @@ export async function POST(request: Request) {
 
 async function readBrief(
   request: Request,
-): Promise<{ brief: unknown; image: Buffer | null }> {
+): Promise<{ brief: unknown; options: unknown; image: Buffer | null }> {
   const contentType = request.headers.get("content-type") ?? "";
 
   if (contentType.includes("multipart/form-data")) {
@@ -85,7 +88,12 @@ async function readBrief(
     if (file instanceof File && file.size > 0) {
       image = await readCampaignImageFile(file);
     }
-    return { brief: form.get("brief"), image };
+    const rawOptions = form.get("options");
+    let options: unknown;
+    if (typeof rawOptions === "string") {
+      try { options = JSON.parse(rawOptions); } catch { throw new AppError("invalid_body", "Options must be valid JSON."); }
+    }
+    return { brief: form.get("brief"), options, image };
   }
 
   try {
@@ -94,7 +102,8 @@ async function readBrief(
       body && typeof body === "object" && "brief" in body
         ? body.brief
         : undefined;
-    return { brief, image: null };
+    const options = body && typeof body === "object" && "options" in body ? body.options : undefined;
+    return { brief, options, image: null };
   } catch {
     throw new AppError("invalid_body", "Body must be JSON or multipart form data");
   }

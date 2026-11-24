@@ -50,6 +50,13 @@
       "when": 1789904475388,
       "tag": "0006_merged_orchestrator_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1794937982321,
+      "tag": "0007_workflow_integrity",
+      "breakpoints": true
     }
   ]
 }

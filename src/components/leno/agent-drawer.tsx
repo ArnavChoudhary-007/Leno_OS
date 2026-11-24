@@ -10,7 +10,8 @@ export type AgentInfo = {
   statusType: "green" | "amber" | "blue" | "neutral";
   currentTask: string;
   tasksCompleted: number;
-  uptime: string;
+  countLabel: string;
+  availability: string;
   lastActive: string;
   capabilities: string[];
 };
@@ -116,10 +117,10 @@ export function AgentDrawer({
                   <strong>Current task:</strong> {agent.currentTask}
                 </p>
                 <p>
-                  <strong>Tasks completed:</strong> {agent.tasksCompleted}
+                  <strong>{agent.countLabel}:</strong> {agent.tasksCompleted}
                 </p>
                 <p>
-                  <strong>Health:</strong> {agent.uptime}
+                  <strong>Availability:</strong> {agent.availability}
                 </p>
                 <p>
                   <strong>Last active:</strong> {agent.lastActive}

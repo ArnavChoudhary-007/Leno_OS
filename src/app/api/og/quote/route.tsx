@@ -7,6 +7,10 @@ import { AppError } from "@/shared/errors";
 
 export const runtime = "nodejs";
 
+function quoteResponse(brand: Awaited<ReturnType<typeof loadBrandVisual>>, quote: string) {
+  return new ImageResponse(<QuoteCardMarkup brand={brand} quote={quote} />, { ...OG_SIZE });
+}
+
 /**
  * Branded quote card (1080×1080).
  *
@@ -29,10 +33,7 @@ export async function GET(request: Request) {
     if (!quote) throw new AppError("not_found", "Draft not found");
 
     const brand = await loadBrandVisual(ctx.workspaceId);
-    return new ImageResponse(
-      <QuoteCardMarkup brand={brand} quote={quote} />,
-      { ...OG_SIZE },
-    );
+    return quoteResponse(brand, quote);
   } catch (err) {
     if (err instanceof AppError) {
       return jsonErrorCode(err.code, { requestId, message: err.message });

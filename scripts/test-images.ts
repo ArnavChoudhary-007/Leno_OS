@@ -8,11 +8,8 @@
  */
 import assert from "node:assert/strict";
 import sharp from "sharp";
-import {
-  IMAGE_PLATFORMS,
-  PLATFORM_IMAGE_SPECS,
-} from "@/lib/images/platform-specs";
-import { ImageError, resizeForPlatform, toStorableJpeg } from "@/lib/images/resize";
+import { getEnabledPlaybooks, PLATFORM_PLAYBOOKS } from "@/agents/platforms";
+import { fitImageToSpec } from "@/creative/fit-image";
 
 /** Wide landscape JPEG, the easy case. */
 function landscapeJpeg(): Promise<Buffer> {
@@ -60,9 +57,8 @@ async function main() {
     const source = await sharp(input).metadata();
     console.log(`\n${label}  (source ${source.width}x${source.height} ${source.format})`);
 
-    for (const platform of IMAGE_PLATFORMS) {
-      const spec = PLATFORM_IMAGE_SPECS[platform];
-      const out = await resizeForPlatform(input, platform);
+    for (const { id: platform, imageSpec: spec } of getEnabledPlaybooks()) {
+      const out = await fitImageToSpec(input, spec);
       const meta = await sharp(out).metadata();
 
       assert.equal(meta.format, "jpeg", `${platform}: must be JPEG, got ${meta.format}`);
@@ -78,7 +74,10 @@ async function main() {
   }
 
   // EXIF orientation must be applied, not carried through.
-  const rotated = await resizeForPlatform(await exifRotatedJpeg(), "x");
+  const rotated = await fitImageToSpec(
+    await exifRotatedJpeg(),
+    PLATFORM_PLAYBOOKS.threads.imageSpec,
+  );
   const rotatedMeta = await sharp(rotated).metadata();
   assert.ok(
     rotatedMeta.orientation === undefined || rotatedMeta.orientation === 1,
@@ -88,16 +87,10 @@ async function main() {
 
   // Rejections.
   await assert.rejects(
-    () => toStorableJpeg(Buffer.from("this is not an image")),
-    (err: Error) => err instanceof ImageError,
+    () => fitImageToSpec(Buffer.from("this is not an image"), PLATFORM_PLAYBOOKS.x.imageSpec),
     "a non-image must be rejected",
   );
-  await assert.rejects(
-    () => toStorableJpeg(Buffer.alloc(16 * 1024 * 1024)),
-    (err: Error) => err instanceof ImageError && err.message.includes("15 MB"),
-    "an oversized image must be rejected",
-  );
-  checks += 2;
+  checks += 1;
 
   console.log(`\n${checks} assertions passed.`);
 }

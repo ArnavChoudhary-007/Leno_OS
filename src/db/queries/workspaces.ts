@@ -1,7 +1,8 @@
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { workspaceInvites, workspaceMembers, workspaces } from "@/db/schema";
 import type { WorkspaceRole } from "@/shared/types";
+import { AppError } from "@/shared/errors";
 
 export const LOCAL_WORKSPACE_SLUG = "local";
 
@@ -61,17 +62,6 @@ export async function setWorkspaceMemberRole(
   return row ?? null;
 }
 
-export async function getInviteByTokenHash(
-  tokenHash: string,
-): Promise<WorkspaceInvite | null> {
-  const [row] = await db
-    .select()
-    .from(workspaceInvites)
-    .where(eq(workspaceInvites.token_hash, tokenHash))
-    .limit(1);
-  return row ?? null;
-}
-
 export async function insertInvite(input: {
   workspaceId: string;
   email: string;
@@ -94,13 +84,18 @@ export async function insertInvite(input: {
   return row;
 }
 
-export async function markInviteAccepted(
-  id: string,
-): Promise<WorkspaceInvite | null> {
-  const [row] = await db
-    .update(workspaceInvites)
-    .set({ accepted_at: new Date().toISOString() })
-    .where(and(eq(workspaceInvites.id, id)))
-    .returning();
-  return row ?? null;
+export async function acceptWorkspaceInvite(tokenHash: string, userId: string, email: string | null): Promise<void> {
+  await db.transaction(async (tx) => {
+    const [invite] = await tx.select().from(workspaceInvites).where(eq(workspaceInvites.token_hash, tokenHash)).for("update");
+    if (!invite || invite.accepted_at || new Date(invite.expires_at).getTime() <= Date.now()) {
+      throw new AppError("invalid_body", "This invite is expired, invalid, or already used.");
+    }
+    if (!email || email.toLowerCase() !== invite.email.toLowerCase()) {
+      throw new AppError("forbidden", "Sign in with the email this invite was sent to.");
+    }
+    const [existing] = await tx.select().from(workspaceMembers).where(eq(workspaceMembers.user_id, userId)).limit(1);
+    if (existing) throw new AppError("conflict", "You already belong to a workspace.");
+    await tx.insert(workspaceMembers).values({ workspace_id: invite.workspace_id, user_id: userId, role: invite.role === "owner" ? "admin" : invite.role });
+    await tx.update(workspaceInvites).set({ accepted_at: new Date().toISOString() }).where(eq(workspaceInvites.id, invite.id));
+  });
 }

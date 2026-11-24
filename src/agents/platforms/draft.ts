@@ -4,6 +4,7 @@ import { generateStructured, type StructuredResult } from "@/tools/llm";
 import { playbookBlock, systemPrompt } from "../prompt";
 import { PLATFORM_PLAYBOOKS } from ".";
 import { applyLinkedInAgent } from "./linkedin-rules";
+import { applyInstagramAgent } from "./instagram-rules";
 
 const WRITER_ROLE =
   "You are the staff writer for a social distribution system. You write posts that sound like a person, not a brand deck.";
@@ -20,6 +21,14 @@ function briefFor(plan: Plan, strategy: Strategy): string[] {
     `ANGLE: ${strategy.angle}`,
     `HOOKS TO DRAW FROM: ${strategy.hooks.join(" | ")}`,
     `CTA: ${strategy.cta}`,
+    ...(plan.platforms.includes("instagram") ? [
+      `INSTAGRAM FORMAT: ${plan.instagram_format ?? "caption"}.`,
+      plan.instagram_format === "carousel"
+        ? "Write the caption followed by numbered 'Slide N:' lines, one complete slide per line."
+        : plan.instagram_format === "story"
+          ? "Write numbered 'Story N:' lines, one complete frame per line, with explicit sticker instructions."
+          : "Write a plain caption; do not add slide or story markers.",
+    ] : []),
   ];
 }
 
@@ -63,7 +72,7 @@ export async function draftAll(
     ...result,
     object: dedupeByPlatform(result.object.drafts, plan.platforms).map(
       applyLinkedInAgent,
-    ),
+    ).map(applyInstagramAgent),
   };
 }
 
@@ -117,7 +126,7 @@ export async function reviseDrafts(
     ...result,
     object: dedupeByPlatform(result.object.drafts, platforms).map(
       applyLinkedInAgent,
-    ),
+    ).map(applyInstagramAgent),
   };
 }
 

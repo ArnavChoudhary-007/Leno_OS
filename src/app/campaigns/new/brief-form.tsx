@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { Drawer } from "@/components/leno/drawer";
@@ -8,8 +8,9 @@ import { EditorDrawer, type EditorDraft } from "@/components/leno/editor-drawer"
 import { PlatformPill } from "@/components/leno/platform-pill";
 import { apiErrorMessage } from "@/lib/api-error";
 import { reviewDraftOrThrow } from "@/lib/review-draft";
-import { platformLabel } from "@/lib/workspace-ui";
+import { canApproveDraft, nativePublishDestination, platformLabel } from "@/lib/workspace-ui";
 import type { CampaignStatus, PlatformId } from "@/shared/types";
+import { CampaignCreateSchema } from "@/shared/schemas";
 
 const SAMPLE =
   "Why most companies don't have a content problem.\nThey have a distribution problem.";
@@ -117,9 +118,9 @@ export function BriefForm({
   );
   const [format, setFormat] = useState("Educational");
   const [platforms, setPlatforms] = useState<PlatformId[]>(["linkedin", "instagram", "x"]);
-  const [research, setResearch] = useState("standard");
+  const [research, setResearch] = useState<"standard" | "deep">("standard");
   const [creativity, setCreativity] = useState(0.7);
-  const [length, setLength] = useState("medium");
+  const [length, setLength] = useState<"short" | "medium" | "long">("medium");
   const [includeResearch, setIncludeResearch] = useState(true);
   const [brandVoice, setBrandVoice] = useState(true);
   const [image, setImage] = useState<File | null>(null);
@@ -144,22 +145,38 @@ export function BriefForm({
     return idx < 0 ? 0 : idx;
   }, [lastStep, generating]);
 
+  const refreshCampaign = useCallback(async (id: string, signal?: AbortSignal) => {
+    const res = await fetch(`/api/campaigns/${id}`, { cache: "no-store", signal });
+    if (!res.ok) throw new Error(apiErrorMessage(await res.json().catch(() => ({})), `Could not load campaign (${res.status})`));
+    const json = (await res.json()) as {
+      campaign: { status: CampaignStatus };
+      steps: { step: string }[];
+      drafts: EditorDraft[];
+    };
+    if (signal?.aborted) return true;
+    setStatus(json.campaign.status);
+    setLastStep(json.steps[json.steps.length - 1]?.step ?? null);
+    setDrafts(json.drafts ?? []);
+    setError(null);
+    return ["ready", "needs_human", "failed"].includes(json.campaign.status);
+  }, []);
+
   useEffect(() => {
-    if (!campaignId || done || status === "failed") return;
-    const id = window.setInterval(async () => {
-      const res = await fetch(`/api/campaigns/${campaignId}`, { cache: "no-store" });
-      if (!res.ok) return;
-      const json = (await res.json()) as {
-        campaign: { status: CampaignStatus };
-        steps: { step: string }[];
-        drafts: EditorDraft[];
-      };
-      setStatus(json.campaign.status);
-      setLastStep(json.steps[json.steps.length - 1]?.step ?? null);
-      setDrafts(json.drafts ?? []);
-    }, 1000);
-    return () => window.clearInterval(id);
-  }, [campaignId, done, status]);
+    if (!campaignId) return;
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout>;
+    async function poll() {
+      try {
+        if (await refreshCampaign(campaignId!, controller.signal)) return;
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        setError(error instanceof Error ? error.message : "Could not refresh campaign");
+      }
+      if (!controller.signal.aborted) timer = setTimeout(() => { void poll(); }, 1000);
+    }
+    timer = setTimeout(() => { void poll(); }, 0);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [campaignId, refreshCampaign]);
 
   function togglePlatform(id: PlatformId) {
     setPlatforms((prev) => {
@@ -186,62 +203,99 @@ export function BriefForm({
       idea.trim(),
       "",
       `Topic: ${topic}. Audience: ${selectedAudience}. Goal: ${goal}. Tone: ${tone}. Format: ${format}.`,
-      `Write only for: ${platforms.map(platformLabel).join(", ")}.`,
-      `Length: ${length}. Creativity: ${creativity}. Research: ${research}${includeResearch ? " with citations where useful" : ""}.`,
-      brandVoice ? "Stay strictly on brand voice." : "",
-      source !== "idea" ? `Creation mode: ${source}.` : "",
     ]
       .filter(Boolean)
       .join("\n");
-    return extra.slice(0, 2000);
+    return extra;
   }
 
   function generate() {
     setError(null);
+    const brief = composeBrief();
+    const parsed = CampaignCreateSchema.safeParse({ brief, options: { platforms, creativity, research: includeResearch, researchDepth: research, length, brandVoice, source } });
+    if (!parsed.success) {
+      setError(parsed.error.issues[0]?.message ?? `The complete brief must be 20-2000 characters (currently ${brief.length}).`);
+      return;
+    }
     startTransition(async () => {
-      const body = new FormData();
-      body.set("brief", composeBrief());
-      if (image) body.set("image", image);
-      const res = await fetch("/api/campaigns", { method: "POST", body });
-      const data: unknown = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        const message = apiErrorMessage(data, `Request failed (${res.status})`);
+      try {
+        const body = new FormData();
+        body.set("brief", parsed.data.brief);
+        body.set("options", JSON.stringify(parsed.data.options));
+        if (image) body.set("image", image);
+        const res = await fetch("/api/campaigns", { method: "POST", body });
+        const data: unknown = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          const message = apiErrorMessage(data, `Request failed (${res.status})`);
+          setError(message);
+          toast.error(message);
+          return;
+        }
+        if (data && typeof data === "object" && "id" in data && typeof data.id === "string") {
+          setCampaignId(data.id);
+          setStatus("queued");
+          setDrafts([]);
+          toast.success("Orchestrator started");
+          return;
+        }
+        setError("Unexpected response");
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Could not reach the server";
         setError(message);
         toast.error(message);
-        return;
       }
-      if (data && typeof data === "object" && "id" in data && typeof data.id === "string") {
-        setCampaignId(data.id);
-        setStatus("queued");
-        setDrafts([]);
-        toast.success("Orchestrator started");
-        return;
-      }
-      setError("Unexpected response");
     });
   }
 
   function approveAll() {
     startTransition(async () => {
       try {
+        let approved = 0;
         for (const draft of drafts) {
-          if (draft.status === "published") continue;
-          await reviewDraftOrThrow(draft.campaign_id, draft.id, { action: "approve" });
+          if (!canApproveDraft(draft.status)) continue;
+          await reviewDraftOrThrow(draft.campaign_id, draft.id, { action: "approve", body: draft.body, hashtags: draft.hashtags });
+          approved += 1;
         }
-        toast.success("Approved all drafts");
+        toast.success(`Approved ${approved} drafts`);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Approve failed");
+      } finally {
+        if (campaignId) {
+          try { await refreshCampaign(campaignId); }
+          catch (error) { toast.error(error instanceof Error ? error.message : "Could not refresh drafts"); }
+        }
+      }
+    });
+  }
+
+  function approveDraft(draft: EditorDraft) {
+    if (!canApproveDraft(draft.status)) return;
+    startTransition(async () => {
+      try {
+        await reviewDraftOrThrow(draft.campaign_id, draft.id, {
+          action: "approve",
+          body: draft.body,
+          hashtags: draft.hashtags,
+        });
+        toast.success("Approved");
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Approval failed");
+      } finally {
+        if (campaignId) {
+          try { await refreshCampaign(campaignId); }
+          catch (error) { toast.error(error instanceof Error ? error.message : "Could not refresh drafts"); }
+        }
       }
     });
   }
 
   const placeholder =
     source === "source"
-      ? "Paste a whitepaper link, raw notes, or article excerpt..."
+      ? "Paste source text, raw notes, or an article excerpt (links are not fetched)..."
       : source === "campaign"
         ? "Define a multi-day campaign arc..."
         : source === "repurpose"
-          ? "Paste a high-performing past post or URL to adapt..."
+          ? "Paste the full text of a high-performing past post to adapt..."
           : "Describe the idea in a few words...";
 
   return (
@@ -339,7 +393,7 @@ export function BriefForm({
                 toast.success("Idea sharpened");
               }}
             >
-              Enhance with AI
+              Add distribution framing
             </button>
           </div>
           <div className="canvas-writing-surface">
@@ -357,7 +411,7 @@ export function BriefForm({
             </div>
           </div>
           <div className="ai-suggestions-bar">
-            <span className="suggestions-label">AI suggestions</span>
+            <span className="suggestions-label">Writing shortcuts</span>
             <div className="suggestions-chips">
               <button
                 type="button"
@@ -436,6 +490,7 @@ export function BriefForm({
                     <span className="spec-variant">{item.variant}</span>
                   </div>
                   <div className="platform-module-output-preview">{item.preview}</div>
+                  <div className="platform-module-output-preview">{nativePublishDestination(item.id) ? `Publish after approval to ${nativePublishDestination(item.id)}` : "Export only - no native publishing or scheduling"}</div>
                 </button>
               );
             })}
@@ -533,8 +588,8 @@ export function BriefForm({
             <span className="showcase-badge">Content Ready</span>
             <h2 className="showcase-title">Platform Content Generated</h2>
           </div>
-          <button type="button" className="btn btn-primary" onClick={approveAll} disabled={pending}>
-            Approve All to Review Pipeline
+          <button type="button" className="btn btn-primary" onClick={approveAll} disabled={pending || !drafts.some((draft) => canApproveDraft(draft.status))}>
+            Approve all eligible drafts
           </button>
         </div>
         <div className="showcase-cards-grid">
@@ -556,12 +611,8 @@ export function BriefForm({
                 <button
                   type="button"
                   className="btn-result-approve"
-                  onClick={() =>
-                    void reviewDraftOrThrow(draft.campaign_id, draft.id, { action: "approve" }).then(
-                      () => toast.success("Approved"),
-                      (err) => toast.error(err instanceof Error ? err.message : "Failed"),
-                    )
-                  }
+                  disabled={pending || !canApproveDraft(draft.status)}
+                  onClick={() => approveDraft(draft)}
                 >
                   Approve
                 </button>
@@ -593,7 +644,7 @@ export function BriefForm({
         <div style={{ padding: "22px 24px", display: "flex", flexDirection: "column", gap: 20 }}>
           <label className="drawer-setting-label">Research depth</label>
           <div className="segmented-control">
-            {["quick", "standard", "deep"].map((val) => (
+            {(["standard", "deep"] as const).map((val) => (
               <button
                 key={val}
                 type="button"
@@ -607,7 +658,7 @@ export function BriefForm({
           <label className="drawer-setting-label">Creativity · {creativity.toFixed(1)}</label>
           <input
             type="range"
-            min={0.1}
+            min={0}
             max={1}
             step={0.1}
             value={creativity}
@@ -615,7 +666,7 @@ export function BriefForm({
           />
           <label className="drawer-setting-label">Content length</label>
           <div className="segmented-control">
-            {["short", "medium", "long"].map((val) => (
+            {(["short", "medium", "long"] as const).map((val) => (
               <button
                 key={val}
                 type="button"
@@ -647,7 +698,8 @@ export function BriefForm({
       </Drawer>
 
       <EditorDrawer
-        draft={editing}
+        key={editing?.id ?? "closed"}
+        draft={editing ? drafts.find((draft) => draft.id === editing.id) ?? null : null}
         author={{
           name: brandName ?? "Brand",
           handle: (brandName ?? "brand").toLowerCase().replace(/\s+/g, ""),
@@ -655,7 +707,7 @@ export function BriefForm({
         }}
         canMutate
         onClose={() => setEditing(null)}
-        onChanged={() => undefined}
+        onChanged={async () => { if (campaignId) await refreshCampaign(campaignId); }}
       />
     </div>
   );

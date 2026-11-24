@@ -1,8 +1,10 @@
 import { google } from "@ai-sdk/google";
 import { groq } from "@ai-sdk/groq";
 import { generateObject, type LanguageModel } from "ai";
+import { setTimeout } from "node:timers/promises";
 import type { z } from "zod";
 import { env } from "@/env";
+import { getModelContext, recordModelAttempt, runSignal } from "./run-context";
 
 export type LlmRole = "writer" | "critic";
 
@@ -80,10 +82,6 @@ export function isRetryable(err: unknown): boolean {
   );
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 export type StructuredResult<T> = {
   object: T;
   /** The model id that actually answered — may be the fallback. */
@@ -111,20 +109,22 @@ export async function generateStructured<T>({
 }): Promise<StructuredResult<T>> {
   const primary = modelFor(role);
   const started = Date.now();
+  const context = getModelContext();
 
   const call = async (target: { id: string; model: LanguageModel }) => {
+    await recordModelAttempt();
     const { object } = await generateObject({
       model: target.model,
       schema,
       system,
-      prompt,
-      temperature: temperature ?? TEMPERATURE[role],
+      prompt: context && role === "writer" ? prompt + "\nRequested post length: " + context.options.length + "." : prompt,
+      temperature: temperature ?? (role === "writer" ? context?.options.creativity : undefined) ?? TEMPERATURE[role],
       // Critic scores 4 platforms in one JSON blob; the Groq default
       // truncates mid-object and fails schema validation.
       maxOutputTokens: role === "critic" ? 8192 : 4096,
       // We own retries below — the SDK's default 2 retries burn free-tier quota.
       maxRetries: 0,
-      abortSignal: AbortSignal.timeout(TIMEOUT_MS),
+      abortSignal: runSignal(TIMEOUT_MS),
     });
     return { object: object as T, model: target.id, ms: Date.now() - started };
   };
@@ -135,12 +135,13 @@ export async function generateStructured<T>({
       return await call(primary);
     } catch (err) {
       lastError = err;
+      context?.signal.throwIfAborted();
       if (!isRetryable(err) || attempt === PRIMARY_ATTEMPTS) break;
       const waitMs = 400 * attempt;
       console.warn(
         `[llm] ${role} "${primary.id}" attempt ${attempt} failed; retrying in ${waitMs}ms`,
       );
-      await sleep(waitMs);
+      await setTimeout(waitMs, undefined, { signal: context?.signal });
     }
   }
 

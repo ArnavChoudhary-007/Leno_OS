@@ -1,5 +1,5 @@
 import { loadPageAuth } from "@/auth/server";
-import { can } from "@/authz/can";
+import { can, isAdminRole } from "@/authz/can";
 import { AppShell } from "@/components/app-shell";
 import { EmptyState } from "@/components/empty-state";
 import { NoWorkspace } from "@/components/no-workspace";
@@ -27,7 +27,7 @@ export default async function CampaignPage({
       workspaceId={ctx.workspaceId}
     >
       {campaign ? (
-        <CampaignView campaignId={id} />
+        <CampaignView campaignId={id} canMutate={canMutate} isAdmin={isAdminRole(ctx.role)} />
       ) : (
         <EmptyState
           title="Campaign not found"

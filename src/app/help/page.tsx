@@ -30,12 +30,14 @@ export default async function HelpPage() {
           <li>Platform agents write LinkedIn, Instagram, X, and Threads copy.</li>
           <li>The critic scores each draft. Below 0.8 goes back for revision, max 3 rounds.</li>
           <li>You approve, schedule, or reject on Content, Track, or the campaign page.</li>
-          <li>Approved LinkedIn drafts publish to a connected LinkedIn account. Other channels still publish to Bluesky when that is configured.</li>
+          <li>Approved LinkedIn drafts publish to LinkedIn. X-format drafts publish to Bluesky when configured. Instagram and Threads are export-only: copy the post and download its image.</li>
+          <li>Scheduling requires the separate scheduler process. Uncertain publication outcomes are locked until an owner or administrator reconciles them on the campaign page.</li>
         </ol>
         <p>
           Brand voice lives under Settings. Change the brand card and the next run writes
           differently. Analytics counts workspace output — not third-party impressions.
         </p>
+        <p>Owners and administrators can create teammate invitation links under Integrations. Recipients need a sign-in account matching the invited email.</p>
       </div>
     </AppShell>
   );

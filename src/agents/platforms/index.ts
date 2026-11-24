@@ -5,6 +5,7 @@ import { instagramPlaybook } from "./instagram";
 import { threadsPlaybook } from "./threads";
 import { facebookPlaybook } from "./facebook";
 import type { PlatformPlaybook } from "./types";
+import { instagramCaption } from "./instagram-rules";
 
 export type { PlatformPlaybook } from "./types";
 export { applyLinkedInAgent } from "./linkedin-rules";
@@ -38,6 +39,13 @@ function normalizeTag(tag: string): string {
  * them separately; compose at validate/publish time.
  */
 export function composePost(draft: Draft): string {
+  return composeDraftExport({
+    ...draft,
+    body: draft.platform === "instagram" ? instagramCaption(draft.body) : draft.body,
+  });
+}
+
+export function composeDraftExport(draft: Draft): string {
   const tags = draft.hashtags.map(normalizeTag).filter(Boolean);
   if (tags.length === 0) return draft.body.trim();
   return `${draft.body.trim()}\n\n${tags.join(" ")}`;

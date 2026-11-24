@@ -5,6 +5,7 @@ import { AppError } from "@/shared/errors";
 import { ResearchBriefSchema } from "@/shared/schemas";
 import type { ResearchBrief } from "@/shared/types";
 import { buildResearchQuery } from "./tavily-format";
+import { getModelContext, runSignal } from "./run-context";
 
 export { buildResearchQuery, formatResearchBlock } from "./tavily-format";
 
@@ -62,11 +63,11 @@ export async function researchForLinkedIn(input: {
       },
       body: JSON.stringify({
         query,
-        search_depth: "basic",
+        search_depth: getModelContext()?.options.researchDepth === "deep" ? "advanced" : "basic",
         max_results: MAX_RESULTS,
         include_answer: true,
       }),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: runSignal(TIMEOUT_MS),
     });
 
     if (!res.ok) {
