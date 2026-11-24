@@ -22,8 +22,6 @@ jobs:
       - run: npm test
       - run: npm run test:images
       - run: npm run build
-        env:
-          SKIP_ENV_VALIDATION: "1"
       - run: docker build --target runner --tag leno-app:ci .
       - run: docker build --target worker --tag leno-worker:ci .
 

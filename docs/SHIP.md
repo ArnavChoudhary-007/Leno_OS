@@ -7,10 +7,7 @@ Supabase Postgres. PM2 is the native path; Docker Compose is an alternative.
 
 - [ ] Node.js 22+ and npm installed; run `npm ci` including dev dependencies.
 - [ ] `npm test`, `npm run test:images`, `npm run lint`, and `npm run typecheck` pass.
-- [ ] Secret-free build passes: set `SKIP_ENV_VALIDATION=1` for `npm run build` only.
-      In PowerShell use `$env:SKIP_ENV_VALIDATION='1'; npm run build`, then
-      `Remove-Item Env:SKIP_ENV_VALIDATION`; in POSIX shells use
-      `SKIP_ENV_VALIDATION=1 npm run build`.
+- [ ] `npm run build` passes without secrets or a validation override.
 - [ ] Do not set `SKIP_ENV_VALIDATION=1` for web, worker, or publishing CLI runtime.
 - [ ] `.env` contains `APP_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
       `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL`, writer/critic keys, and
@@ -30,6 +27,27 @@ Supabase Postgres. PM2 is the native path; Docker Compose is an alternative.
 No credentials are required to build. A build-only inert database URL
 prevents client initialization errors without connecting to Postgres;
 runtime configuration remains required. Never bake `.env` into an image.
+
+## Vercel web deployment
+
+1. Import the repository as a Next.js project and build the branch containing
+   this fix with `npm run build`. Leave `SKIP_ENV_VALIDATION` unset.
+2. In Vercel project settings, configure these environment variables for the
+   deployment environment (Production or Preview): `APP_URL`, `DATABASE_URL`,
+   `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`,
+   `GOOGLE_GENERATIVE_AI_API_KEY`, `GROQ_API_KEY`, `WRITER_MODEL`, and
+   `CRITIC_MODEL`. Use the deployed HTTPS origin for `APP_URL` and keep all
+   secrets server-only. Optional integrations are listed in `.env.example`.
+3. Add `{APP_URL}/auth/callback` to Supabase Auth's allowed redirect URLs and
+   set the production Site URL to the production origin.
+4. Apply pending migrations separately using the intended database's Session
+   or Direct URL; Vercel's build does not apply migrations. Redeploy after
+   environment changes, then check sign-in and campaign loading.
+
+A successful Vercel build does not provision the persistent writable upload
+directory or the long-running scheduler. The web-only deployment does not
+provide durable campaign media or scheduled publishing on its own. Use the
+EC2/Compose path below for both features with the current local-storage design.
 
 ## First-time EC2 setup (PM2)
 
@@ -105,8 +123,7 @@ docker compose logs --tail=100 app scheduler migrate
 The one-shot `migrate` service gates startup of both `app` and `scheduler`.
 The app uses the `runner` target (Next standalone); migration and scheduler
 use the `worker` target, which includes TypeScript tooling/config/source.
-All runtime services run as the non-root `node` user. The worker image does
-not inherit the builder's `SKIP_ENV_VALIDATION=1` setting.
+All runtime services run as the non-root `node` user with validation enabled.
 
 App and scheduler mount the same named `uploads` volume at `/app/uploads`.
 The image creates that directory owned by `node` (UID/GID 1000), so a new

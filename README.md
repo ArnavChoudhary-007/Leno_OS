@@ -162,15 +162,12 @@ Check it's alive: `GET /api/health` returns `{ "ok": true }`.
 
 ## Environment variables
 
-All variables are in `.env.example` and validated at startup by
-`src/env.ts`. Set `SKIP_ENV_VALIDATION=1` for CI or Docker builds that
-compile without secrets.
-
-`SKIP_ENV_VALIDATION=1` is **build/test only**; do not set it for the app,
-CLI publishing commands, or scheduler. During `next build` only, a missing
-`DATABASE_URL` uses an inert loopback URL without connecting to a database.
-At runtime a missing database URL still fails. Real deployments need the
-required variables below in both the web process and scheduler.
+All variables are in `.env.example` and validated at runtime by `src/env.ts`.
+`npm run build` needs no secrets and uses an inert loopback database URL.
+`SKIP_ENV_VALIDATION=1` is **test only**; do not set it for the app,
+CLI publishing commands, or scheduler. Real deployments need the required
+variables below in both the web process and scheduler. See `docs/SHIP.md`
+for Vercel configuration and hosting limits.
 
 ### Required
 

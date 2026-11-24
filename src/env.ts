@@ -1,15 +1,20 @@
 /**
  * Fails fast on bad config instead of surfacing deep inside an agent or db
- * call. SKIP_ENV_VALIDATION=1 bypasses it for the Docker build, which
- * compiles before any secret exists.
+ * call. Next.js imports server modules during build before runtime settings
+ * necessarily exist. SKIP_ENV_VALIDATION=1 is reserved for test commands.
  *
  * Do not import this module from a Client Component. Service-role and
  * DATABASE_URL must never ship to the browser.
  */
 import { loadEnvConfig } from "@next/env";
 import { z } from "zod";
+import { PHASE_PRODUCTION_BUILD } from "next/constants";
 
 loadEnvConfig(process.cwd());
+
+export function isProductionBuild() {
+  return process.env.NEXT_PHASE === PHASE_PRODUCTION_BUILD;
+}
 
 function emptyToUndefined(value: unknown): unknown {
   return value === "" ? undefined : value;
@@ -84,13 +89,13 @@ function loadEnv() {
   }
 
   const parsed = envSchema.safeParse(process.env);
-  if (!parsed.success) {
-    const issues = parsed.error.issues
-      .map((issue) => `  - ${issue.path.join(".")}: ${issue.message}`)
-      .join("\n");
-    throw new Error(`Invalid environment variables:\n${issues}`);
-  }
-  return parsed.data;
+  if (parsed.success) return parsed.data;
+  if (isProductionBuild()) return process.env as unknown as z.infer<typeof envSchema>;
+
+  const issues = parsed.error.issues
+    .map((issue) => `  - ${issue.path.join(".")}: ${issue.message}`)
+    .join("\n");
+  throw new Error(`Invalid environment variables:\n${issues}`);
 }
 
 export const env = loadEnv();

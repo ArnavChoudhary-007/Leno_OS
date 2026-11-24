@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createSupabaseServer } from "@/auth/server";
 import { env } from "@/env";
 
+export const runtime = "nodejs";
+
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");

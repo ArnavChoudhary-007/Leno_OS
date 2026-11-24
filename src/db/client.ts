@@ -1,6 +1,6 @@
 import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
-import { env } from "@/env";
+import { env, isProductionBuild } from "@/env";
 import * as schema from "./schema";
 
 /**
@@ -31,12 +31,9 @@ const globalForDb = globalThis as unknown as {
   __postgresClient?: ReturnType<typeof postgres>;
 };
 
-const isBuild =
-  process.env.SKIP_ENV_VALIDATION === "1" &&
-  process.env.NEXT_PHASE === "phase-production-build";
-const databaseUrl =
-  env.DATABASE_URL ||
-  (isBuild ? "postgresql://build:build@127.0.0.1:1/build" : undefined);
+const databaseUrl = isProductionBuild()
+  ? "postgresql://build:build@127.0.0.1:1/build"
+  : env.DATABASE_URL;
 
 if (!databaseUrl) {
   throw new Error("DATABASE_URL is required at runtime");
